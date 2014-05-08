@@ -31,7 +31,7 @@ to try, then what I've done to make it work is:
 ```
 
 at which point, the compilation will crash due to a missing "-lblas" linker
-option.  Should happen about 3 just got into the src sub-directory and
+option.  Should happen about 3 times.  Just go into the src sub-directory and
 copy/paste the compile command with "-lblas" added to the command line.  It
 will compile fine.  Go back up to the build directory and then type
 make again.  It will then finish compiling.

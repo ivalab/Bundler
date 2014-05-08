@@ -1,6 +1,7 @@
 Install on IVALab Machines
 ==========================
 
+## Kubuntu/Ubuntu (12.04 LTS)
 On a fresh install of kubuntu/ubuntu (12.04), a few libraries need to be
 installed for Bundler to compile (besides gcc and g++).  Basically Bundler
 needs: LAPACK, BLAS, CBLAS, minpack, and f2c.  Install the following

@@ -34,10 +34,14 @@ to try, then what I've done to make it work is:
 ```
 
 at which point, the compilation will crash due to a missing "-lblas" linker
-option.  Should happen about 3 times.  Just go into the src sub-directory and
-copy/paste the compile command with "-lblas" added to the command line.  It
-will compile fine.  Go back up to the build directory and then type
-make again.  It will then finish compiling.
+option.  Should happen about 3 times.  Just go into the src sub-directory
+and copy/paste the compile command with "-lblas" added to the command line.
+It will compile fine.  Go back up to the build directory and then type make
+again.  It will then finish compiling.
+
+If using ATLAS, then you may want to read up in
+/usr/share/doc/libatlas3gf-base/README.Debian for alternating between
+the standard BLAS and the ATLAS/BLAS versions.
 
 I don't know cmake well enough to figure out how to fix the problem.
 Once I deconstruct the Bundler code, I should have a better fix.

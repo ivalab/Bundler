@@ -1,9 +1,10 @@
 Bundler
 =======
 
-This is a modified version of Bundler.  The main modification was done in 
-order to compile Bundler on Linux, Windows, and Mac with CMake build system 
-generator.
+This is a modified-modified version of Bundler.  The first modifications 
+done were to make it multi-platform and to work with cmake.  This version
+is to make it functional for Ubuntu flavors, as well as to hopefully merge
+it into a larger project.
 
 Action | Authors 
  ----- | -------

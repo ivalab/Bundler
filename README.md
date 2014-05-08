@@ -15,6 +15,6 @@ Initial Cmake port  | Pierre moulon pmoulon[AT]gmail.com
 Mac Porting         | Kai Ni 
                     | http://www.kaini.org
 Github              | https://github.com/TheFrenchLeaf/Bundler
-Forked Version      | Patricio Vela / IVALab
+Forked Version      | Patricio A. Vela / IVALab
                     | https://github.com/ivalab/Bundler
 

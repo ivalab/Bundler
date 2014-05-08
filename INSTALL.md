@@ -4,8 +4,10 @@ Install on IVALab Machines
 ## Kubuntu/Ubuntu (12.04 LTS)
 On a fresh install of kubuntu/ubuntu (12.04), a few libraries need to be
 installed for Bundler to compile (besides gcc and g++).  Basically Bundler
-needs: LAPACK, BLAS, CBLAS, minpack, and f2c.  Install the following
-through apt-get:
+needs: LAPACK, BLAS, CBLAS, minpack, and f2c.  This forked version seems to
+have CBLAS caked into it, so let's roll with that one (getting CBLAS to
+compile takes a little magic, at least to get the samples compiled too).
+Install the following through apt-get:
 
 ```bash
 > apt-get -y install gfortran liblapack-dev libatlas-dev \

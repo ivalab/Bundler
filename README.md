@@ -14,6 +14,7 @@ Forked Version      | Patricio Vela / IVALab
 
 ## Web resources 
 
+ -------------- | ----------------------
 Bundler         | http://phototour.cs.washington.edu/bundler/
 CMake version   | http://francemapping.free.fr/Portfolio/Prog3D/BUNDLER.html
 			    | https://github.com/TheFrenchLeaf/Bundler

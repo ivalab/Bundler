@@ -20,8 +20,8 @@ not work out, then install BLAS.
 ```
 
 Running make in the proper directory should work out.  I do not have it
-working with cmake just yet, so don''t bother with that.  If you do want
-to try, then what I''ve done to make it work is:
+working with cmake just yet, so don't bother with that.  If you do want
+to try, then what I've done to make it work is:
 
 ```bash
 > mkdir build
@@ -36,6 +36,6 @@ copy/paste the compile command with "-lblas" added to the command line.  It
 will compile fine.  Go back up to the build directory and then type
 make again.  It will then finish compiling.
 
-I don''t know cmake well enough to figure out how to fix the problem.
+I don't know cmake well enough to figure out how to fix the problem.
 Once I deconstruct the Bundler code, I should have a better fix.
 [2014/05/07].

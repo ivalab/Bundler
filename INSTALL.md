@@ -10,21 +10,22 @@ compile takes a little magic, at least to get the samples compiled too).
 Install the following through apt-get:
 
 ```bash
-> apt-get -y install gfortran liblapack-dev libatlas-dev \
+> apt-get -y install gfortran liblapack-dev libatlas-dev libatlasa3gf-base \
   libminpack1 minpack-dev libcminpack-dev f2c
 ```
 
 These might be overkill, but they should do the trick.  In principle, you 
-should be able to use ATLAS (which is basically a tuned LAS).  If that does
-not work out, then install BLAS.
+should be able to use ATLAS (which is basically a tuned LAS).  If there
+are any problems, just use "apt-cache search" to find the right packages.
+If ATLAS does not work out, then install BLAS.
 
 ```bash
-> apt-get -y install libblas-dev \
+> apt-get -y install libblas-dev libblas3gf \
 ```
 
 Running make in the proper directory should work out.  I do not have it
-working with cmake just yet, so don't bother with that.  If you do want
-to try, then what I've done to make it work is:
+working perfectly with cmake just yet, so don't bother with that.  If you do
+want to try, then what I've done to make it work is:
 
 ```bash
 > mkdir build
@@ -46,3 +47,7 @@ the standard BLAS and the ATLAS/BLAS versions.
 I don't know cmake well enough to figure out how to fix the problem.
 Once I deconstruct the Bundler code, I should have a better fix.
 [2014/05/07].
+
+Note that the project comes with a pre-built SIFT implementation.  To
+be able to fully modify on ones own, the SIFT code will also have to be
+obtained.  See the Bundler documentation for more info.

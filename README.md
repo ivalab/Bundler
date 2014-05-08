@@ -7,12 +7,10 @@ generator.
 
 Action | Authors : 
  ----- | -------
-[Original code author] | Noah Snavely snavely[AT]cs.cornell.edu
-
-[Initial Cmake port ] |	Pierre moulon pmoulon[AT]gmail.com
-[Mac Porting]     	  |	Kai Ni http://www.kaini.org/
-
-[Forked Version]      | Patricio Vela / IVALab
+Original code       | Noah Snavely snavely[AT]cs.cornell.edu
+Initial Cmake port  | Pierre moulon pmoulon[AT]gmail.com
+Mac Porting         | Kai Ni http://www.kaini.org/
+Forked Version      | Patricio Vela / IVALab
 
 --------------------
 - Web resources : - 

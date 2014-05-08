@@ -1,3 +1,8 @@
 build
 *.[oa]
 *.so
+src/Bundle2PMVS
+src/Bundle2Vis
+src/KeyMatchFull
+src/RadialUndistort
+src/bundler

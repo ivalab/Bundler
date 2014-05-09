@@ -1,8 +1,10 @@
 build
 *.[oa]
 *.so
+bin/
 src/Bundle2PMVS
 src/Bundle2Vis
 src/KeyMatchFull
 src/RadialUndistort
 src/bundler
+examples

@@ -14,7 +14,7 @@
 
 # Set this variable to your base install path (e.g., /home/foo/bundler)
 # BASE_PATH="TODO"
-BASE_PATH=$(dirname $(which $0));
+BASE_PATH="$PWD/$(dirname $(which $0))";
 
 if [ $BASE_PATH == "TODO" ]
 then
@@ -31,8 +31,8 @@ then
     MATCHKEYS=$BASE_PATH/bin/KeyMatchFull.exe
     BUNDLER=$BASE_PATH/bin/Bundler.exe
 else
-    MATCHKEYS=$BASE_PATH/Output/src/KeyMatchFull
-    BUNDLER=$BASE_PATH/Output/src/Bundler
+    MATCHKEYS=$BASE_PATH/src/KeyMatchFull
+    BUNDLER=$BASE_PATH/src/bundler
 fi
 
 TO_SIFT=$BASE_PATH/bin/ToSift.sh

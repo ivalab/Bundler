@@ -18,14 +18,14 @@ BASE_PATH="$PWD/$(dirname $(which $0))";
 
 if [ $BASE_PATH == "TODO" ]
 then
-    echo "Please modify this script (RunBundler.sh) with the base path of your bundler installation.";
-    exit;
+  echo "Please modify this script (RunBundler.sh) with the base path of your bundler installation.";
+  exit;
 fi
 
-EXTRACT_FOCAL=$BASE_PATH/bin/extract_focal.pl
 
 OS=`uname -o`
 
+EXTRACT_FOCAL=$BASE_PATH/bin/extract_focal.pl
 if [ $OS == "Cygwin" ]
 then
     MATCHKEYS=$BASE_PATH/bin/KeyMatchFull.exe
@@ -34,21 +34,19 @@ else
     MATCHKEYS=$BASE_PATH/src/KeyMatchFull
     BUNDLER=$BASE_PATH/src/bundler
 fi
-
 TO_SIFT=$BASE_PATH/bin/ToSift.sh
-
 IMAGE_DIR="."
 
 if [ $# -eq 1 ]
 then
-    echo "Using directory '$1'"
-    IMAGE_DIR=$1
+  echo "Using directory '$1'"
+  IMAGE_DIR=$1
 fi
 
 # Rename ".JPG" to ".jpg"
 for d in `ls -1 $IMAGE_DIR | egrep ".JPG$"`
 do 
-    mv $IMAGE_DIR/$d $IMAGE_DIR/`echo $d | sed 's/\.JPG/\.jpg/'`
+  mv $IMAGE_DIR/$d $IMAGE_DIR/`echo $d | sed 's/\.JPG/\.jpg/'`
 done
 
 # Create the list of images

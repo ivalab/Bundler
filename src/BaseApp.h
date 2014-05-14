@@ -58,60 +58,62 @@ using namespace boost;
 // #endif /* __DEMO__ */
 
 #ifdef __USE_BOOST__
-typedef adjacency_list<vecS, vecS, 
-                       undirectedS, 
+typedef adjacency_list<vecS, vecS, undirectedS, 
                        property<vertex_color_t, int>, 
                        property<edge_weight_t, int> > ImageGraph;
 #endif
 
-class TransformInfo {
-public:
-
+class TransformInfo 
+ {
+  public:
     /* File IO routines */
     void ReadFromFile(FILE *f);
     void WriteToFile(FILE *f);
-
+  
     /* For object movies */
     double m_fmatrix[9];
     double m_ematrix[9];
-
+  
     /* For homographies */
     double m_H[9];
     double m_inlier_ratio;
     int m_num_inliers;
-
+  
     /* For color correction */
     double m_gain[3], m_bias[3];
-};
+ };
 
 typedef std::pair<unsigned long, unsigned long> MatchIndex;
 // typedef unsigned long long MatchIndex;
 
 #ifdef WIN32
-namespace stdext {
-    template<>
-    class hash_compare<MatchIndex> {
-	public:
-		static const size_t bucket_size = 4;
-        static const size_t min_buckets = 8;
-        size_t
-        operator()(const MatchIndex &__x) const
-        { return __x.first * 1529 + __x.second; }
-
-        bool operator()(const MatchIndex &__x1, const MatchIndex &__x2) const {
-			return (__x1.first < __x2.first) || (__x1.first == __x2.first && __x1.second < __x2.second);
-        }
-    };
-}
+namespace stdext 
+ {
+  template<>
+  class hash_compare<MatchIndex> 
+   {
+    public:
+     static const size_t bucket_size = 4;
+     static const size_t min_buckets = 8;
+     size_t operator()(const MatchIndex &__x) const
+       { return __x.first * 1529 + __x.second; }
+ 
+     bool operator()(const MatchIndex &__x1, const MatchIndex &__x2) const 
+       { return (__x1.first < __x2.first) 
+                   || (__x1.first == __x2.first && __x1.second < __x2.second); }
+   };
+ }
 #else
-namespace __gnu_cxx {
-    template<>
-    struct hash<MatchIndex> {
-        size_t
-        operator()(MatchIndex __x) const
-        { return __x.first * 1529 + __x.second; }
-    };
-}
+namespace __gnu_cxx 
+ {
+  template<>
+  struct hash<MatchIndex> 
+   {
+    size_t
+    operator()(MatchIndex __x) const 
+      { return __x.first * 1529 + __x.second; }
+   };
+ }
 #endif
 
 /* Table containing information about which pairs of images match */
@@ -153,113 +155,124 @@ public:
 
 #ifdef WIN32
 typedef stdext::hash_map<unsigned int, std::vector<KeypointMatch> >
-   MatchAdjTable;
+                                                                MatchAdjTable;
 #else
 typedef __gnu_cxx::hash_map<unsigned int, std::vector<KeypointMatch> >
-   MatchAdjTable;
+                                                                MatchAdjTable;
 #endif
 
-class AdjListElem {
+/*----- -----*/
+class AdjListElem 
+{
 public:
-    bool operator< (const AdjListElem &other) const {
-        return m_index < other.m_index;
-    }
+  bool operator< (const AdjListElem &other) const 
+    { return m_index < other.m_index; }
     
-    unsigned int m_index;
-    std::vector<KeypointMatch> m_match_list;
+  unsigned int m_index;
+  std::vector<KeypointMatch> m_match_list;
 };
 
 typedef std::vector<AdjListElem> MatchAdjList;
 
+/*----- -----*/
 class MatchTable
 {
-    // typedef __gnu_cxx::hash_set<MatchIndex>::const_iterator const_iterator;
+// typedef __gnu_cxx::hash_set<MatchIndex>::const_iterator const_iterator;
 public:
 
-    MatchTable() { }
+  MatchTable() { }
 
-    MatchTable(int num_images) {
-        m_match_lists.resize(num_images);
-        // m_neighbors.resize(num_images);
-    }
+  MatchTable(int num_images) 
+   { 
+    m_match_lists.resize(num_images);
+    // m_neighbors.resize(num_images);
+   }
 
-    void SetMatch(MatchIndex idx) { 
-        if (Contains(idx))
-            return;  // already set
+  void SetMatch(MatchIndex idx) 
+   { 
+    if (Contains(idx))
+      return;  // already set
 
-        /* Create a new list */
-        // m_match_lists[idx.first][idx.second] = std::vector<KeypointMatch> ();
-        // m_match_lists[idx.first].insert(idx.second);
-        // std::list<unsigned int> tmp;
-        // tmp.push_back(idx.second);
-        // m_neighbors[idx.first].merge(tmp);
+    /* Create a new list */
+    // m_match_lists[idx.first][idx.second] = std::vector<KeypointMatch> ();
+    // m_match_lists[idx.first].insert(idx.second);
+    // std::list<unsigned int> tmp;
+    // tmp.push_back(idx.second);
+    // m_neighbors[idx.first].merge(tmp);
 #if 0
-        MatchAdjList tmp;
-        AdjListElem adjlist_elem;
-        adjlist_elem.m_index = idx.second;
-        tmp.push_back(adjlist_elem);
-        m_match_lists[idx.first].merge(tmp);
+    MatchAdjList tmp;
+    AdjListElem adjlist_elem;
+    adjlist_elem.m_index = idx.second;
+    tmp.push_back(adjlist_elem);
+    m_match_lists[idx.first].merge(tmp);
 #else
-        /* Using vector */
-        AdjListElem e;
-        e.m_index = idx.second;
-        MatchAdjList &l = m_match_lists[idx.first];
-        MatchAdjList::iterator p = lower_bound(l.begin(), l.end(), e);
-        l.insert(p, e);
+    /* Using vector */
+    AdjListElem e;
+    e.m_index = idx.second;
+    MatchAdjList &l = m_match_lists[idx.first];
+    MatchAdjList::iterator p = lower_bound(l.begin(), l.end(), e);
+    l.insert(p, e);
 #endif
-    }
+   }
 
-    void AddMatch(MatchIndex idx, KeypointMatch m) {
-        assert(Contains(idx));
-        // m_match_lists[idx.first][idx.second].push_back(m);
-        GetMatchList(idx).push_back(m);
-    }
+  void AddMatch(MatchIndex idx, KeypointMatch m) 
+   {
+    assert(Contains(idx));
+    // m_match_lists[idx.first][idx.second].push_back(m);
+    GetMatchList(idx).push_back(m);
+   }
 
-    void ClearMatch(MatchIndex idx) { // but don't erase!
-        if (Contains(idx)) {
-            // m_match_lists[idx.first][idx.second].clear();
-            GetMatchList(idx).clear();
-        }
+  void ClearMatch(MatchIndex idx)       // but don't erase!
+    { 
+     if (Contains(idx)) 
+      {
+       // m_match_lists[idx.first][idx.second].clear();
+       GetMatchList(idx).clear();
+      }
     }
     
-    void RemoveMatch(MatchIndex idx) {
-        if (Contains(idx)) {
-            // m_match_lists[idx.first][idx.second].clear();
-            // m_match_lists[idx.first].erase(idx.second);
-            std::vector<KeypointMatch> &match_list = GetMatchList(idx);
-            match_list.clear();
+  void RemoveMatch(MatchIndex idx) 
+   {
+    if (Contains(idx)) 
+     {
+      // m_match_lists[idx.first][idx.second].clear();
+      // m_match_lists[idx.first].erase(idx.second);
+      std::vector<KeypointMatch> &match_list = GetMatchList(idx);
+      match_list.clear();
 
-            // Remove the neighbor
+      // Remove the neighbor
 #if 0
-            std::list<unsigned int> &l = m_neighbors[idx.first];
-            std::pair<std::list<unsigned int>::iterator,
-                      std::list<unsigned int>::iterator> p = 
-                equal_range(l.begin(), l.end(), idx.second);
+      std::list<unsigned int> &l = m_neighbors[idx.first];
+      std::pair<std::list<unsigned int>::iterator,
+                std::list<unsigned int>::iterator> 
+                p = equal_range(l.begin(), l.end(), idx.second);
 
-            assert(p.first != l.end());
-            
-            l.erase(p.first, p.second);
+      assert(p.first != l.end());
+           
+      l.erase(p.first, p.second);
 #endif
-            AdjListElem e;
-            e.m_index = idx.second;
-            MatchAdjList &l = m_match_lists[idx.first];
-            std::pair<MatchAdjList::iterator, MatchAdjList::iterator> p = 
-                equal_range(l.begin(), l.end(), e);
+      AdjListElem e;
+      e.m_index = idx.second;
+      MatchAdjList &l = m_match_lists[idx.first];
+      std::pair<MatchAdjList::iterator, MatchAdjList::iterator> 
+        p = equal_range(l.begin(), l.end(), e);
 
-            assert(p.first != p.second); // l.end());
+      assert(p.first != p.second); // l.end());
             
-            l.erase(p.first, p.second);        
-        }
-    }
+      l.erase(p.first, p.second);        
+     }
+   }
 
-    unsigned int GetNumMatches(MatchIndex idx) {
-        if (!Contains(idx))
-            return 0;
+  unsigned int GetNumMatches(MatchIndex idx) 
+   {
+    if (!Contains(idx))
+      return 0;
         
-        // return m_match_lists[idx.first][idx.second].size();
-        return GetMatchList(idx).size();
-    }
+    // return m_match_lists[idx.first][idx.second].size();
+    return GetMatchList(idx).size();
+   }
 
+//TODO: IAMHERE. 
     std::vector<KeypointMatch> &GetMatchList(MatchIndex idx) {
         // assert(Contains(idx));
         // return m_match_lists[idx.first][idx.second];

@@ -1,21 +1,32 @@
+/*============================== BundleTwo =============================*/
 /* 
- *  Copyright (c) 2008-2010  Noah Snavely (snavely (at) cs.cornell.edu)
- *    and the University of Washington
- *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
+   Copyright (c) 2008-2010  Noah Snavely (snavely (at) cs.cornell.edu)
+     and the University of Washington
+ 
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+ 
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+ 
  */
+/*============================== BundleTwo =============================*/
+/*
+   Two-frame bundle adjustment for initialization of the bundle.  Once
+   initialized, additional frames and points can be added incrementally.
+   These points should have overlap with the existing frames.
 
-/* BundleTwo.cpp */
-/* Two-frame bundle adjustment */
+   Author:      Noah Snavely
+   Modified:    Patricio A. Vela,       pvela@gatech.edu
+
+   Date:        2014/05/11
+*/
+/*============================== BundleTwo =============================*/
+
 
 #include <assert.h>
 #include <float.h>
@@ -28,7 +39,7 @@
 #include "BundlerApp.h"
 #include "Bundle.h"
 #include "BundleAdd.h"
-// #include "Epipolar.h"
+// #include "Epipolar.h"  //TODO: Get rid of these?
 // #include "Register.h"
 #include "Decompose.h"
 #include "SifterUtil.h"
@@ -46,18 +57,22 @@
 #include "vector.h"
 
 #ifndef WIN32
-#include <ext/hash_map>
+#  include <ext/hash_map>
 #else
-#include <hash_map>
+#  include <hash_map>
 #endif
+
+#define MATCH_THRESHOLD 32
+
 
 /* Stolen from TwoFrameModel.cpp */
 static void WriteVector(FILE *f, int n, const double *v)
 {
-    for (int i = 0; i < n; i++) {
-        fprintf(f, "%0.16e ", v[i]);
-    }
-    fprintf(f, "\n");
+for (int i = 0; i < n; i++) 
+ {
+  fprintf(f, "%0.16e ", v[i]);
+ }
+fprintf(f, "\n");
 }
 
 static void WriteCamera(FILE *f, const camera_params_t &camera)
@@ -68,74 +83,78 @@ static void WriteCamera(FILE *f, const camera_params_t &camera)
 }
 
 void TwoFrameModel::WriteWithProjections(FILE *f, 
-                                         const std::vector<TrackData> &tracks,
-                                         int i1, int i2,
-                                         const ImageData &img1,
+                         const std::vector<TrackData> &tracks,
+                         int i1, int i2, const ImageData &img1,
                                          const ImageData &img2) const
 {
-    std::vector<v2_t> proj1, proj2;
+std::vector<v2_t> proj1, proj2;
     
-    proj1.resize(m_num_points);
-    proj2.resize(m_num_points);
+proj1.resize(m_num_points);
+proj2.resize(m_num_points);
 
-    fprintf(f, "%d\n", m_num_points);
+fprintf(f, "%d\n", m_num_points);
 
-    fprintf(f, "%0.9f\n", m_angle);
+fprintf(f, "%0.9f\n", m_angle);
 
-    for (int i = 0; i < m_num_points; i++) {
-        int tr;
+for (int i = 0; i < m_num_points; i++) 
+ {
+  int tr;
             
-        if (m_tracks == NULL)
-            tr = -1;
-        else
-            tr = m_tracks[i];
+  if (m_tracks == NULL)
+    tr = -1;
+  else
+    tr = m_tracks[i];
 
-        fprintf(f, "%d %0.16e %0.16e %0.16e\n", tr, 
-                Vx(m_points[i]), Vy(m_points[i]), Vz(m_points[i]));
+  fprintf(f, "%d %0.16e %0.16e %0.16e\n", tr, 
+          Vx(m_points[i]), Vy(m_points[i]), Vz(m_points[i]));
         
-        int k1 = -1, k2 = -1;
-        if (tr != -1) {
-            const ImageKeyVector &v = tracks[tr].m_views;
+  int k1 = -1, k2 = -1;
+  if (tr != -1)  
+   {
+    const ImageKeyVector &v = tracks[tr].m_views;
             
-            int num_views = (int) v.size();
-            for (int j = 0; j < num_views; j++) {
-                if (v[j].first == i1)
-                    k1 = v[j].second;
-                else if (v[j].first == i2)
-                    k2 = v[j].second;
-            }
-        } else {
-            k1 = m_keys1[i];
-            k2 = m_keys2[i];
-        }        
+    int num_views = (int) v.size();
+    for (int j = 0; j < num_views; j++) 
+     {
+      if (v[j].first == i1)
+        k1 = v[j].second;
+      else if (v[j].first == i2)
+        k2 = v[j].second;
+     }
+   } 
+  else 
+   {
+    k1 = m_keys1[i];
+    k2 = m_keys2[i];
+   }        
 
-        assert(k1 >= 0 && k2 >= 0);
+  assert(k1 >= 0 && k2 >= 0);
             
-        double x1 = img1.m_keys[k1].m_x;
-        double y1 = img1.m_keys[k1].m_y;
-        double x2 = img2.m_keys[k2].m_x;
-        double y2 = img2.m_keys[k2].m_y;
+  double x1 = img1.m_keys[k1].m_x;
+  double y1 = img1.m_keys[k1].m_y;
+  double x2 = img2.m_keys[k2].m_x;
+  double y2 = img2.m_keys[k2].m_y;
 
-        if (img1.m_fisheye)
-            img1.UndistortPoint(x1, y1, x1, y1);
-        if (img2.m_fisheye)
-            img2.UndistortPoint(x2, y2, x2, y2);
+  if (img1.m_fisheye)
+    img1.UndistortPoint(x1, y1, x1, y1);
+  if (img2.m_fisheye)
+    img2.UndistortPoint(x2, y2, x2, y2);
 
-        fprintf(f, "%0.9e %0.9e %0.9e %0.9e\n", x1, y1, x2, y2);
+  fprintf(f, "%0.9e %0.9e %0.9e %0.9e\n", x1, y1, x2, y2);
 
-        proj1[i] = v2_new(x1, y1);
-        proj2[i] = v2_new(x2, y2);
-    }
+  proj1[i] = v2_new(x1, y1);
+  proj2[i] = v2_new(x2, y2);
+ }
     
-    WriteCamera(f, m_camera0);
-    WriteCamera(f, m_camera1);
+WriteCamera(f, m_camera0);
+WriteCamera(f, m_camera1);
     
-    WriteVector(f, 9, m_C0);
-    WriteVector(f, 9, m_C1);
+WriteVector(f, 9, m_C0);
+WriteVector(f, 9, m_C1);
 
 #if 0
-    /* Compute the translation using DLT */
-    double pts1[30] = {
+  /* Compute the translation using DLT */
+  double pts1[30] = {
         0.0210,    0.3174,    1.0000,
         -0.3350,    0.0522,    1.0000,
         -0.1398,    0.3074,    1.0000,
@@ -148,7 +167,7 @@ void TwoFrameModel::WriteWithProjections(FILE *f,
         0.1108,    0.1131,    1.0000
     };
 
-    double pts2[30] = {
+  double pts2[30] = {
         0.1993,   -0.1316,    1.0000,
         15.3933,    1.5673,    1.0000,
         0.4956,   -0.0401,    1.0000,
@@ -161,33 +180,33 @@ void TwoFrameModel::WriteWithProjections(FILE *f,
         0.0701,    0.5576,    1.0000,
     };
 
-    double R1[9] = {
+  double R1[9] = {
         0.8440,    0.1616,    0.5113,
         0.2310,    0.7509,   -0.6187,
         -0.4840,    0.6403,    0.5965,
     };
 
-    double t1[3] = {
+  double t1[3] = {
         -0.3775, -0.2959, -1.4751
     };
     
-    double R2[9] = {
+  double R2[9] = {
         0.8189,    0.4004,    0.4113,
         -0.0417,    0.7561,   -0.6532,
         -0.5725,    0.5177,    0.6358,
     };
 
-    double t2[3] = {
+  double t2[3] = {
         -0.2340, 0.1184, 0.3148
     };
 
 
-    double R12[9];
-    matrix_transpose_product2(3, 3, 3, 3, R2, R1, R12);
+  double R12[9];
+  matrix_transpose_product2(3, 3, 3, 3, R2, R1, R12);
 
-    double A[30];
+  double A[30];
 
-    for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 10; i++) {
         double *p1 = pts1 + 3 * i;
         double *p2 = pts2 + 3 * i;
 
@@ -203,72 +222,73 @@ void TwoFrameModel::WriteWithProjections(FILE *f,
         r[2] = -p1[0] * p2[1] + p1[1] * p2[0];
     }
     
-    double x[3];
-    matrix_minimum_unit_norm_solution(10, 3, A, x);
+  double x[3];
+  matrix_minimum_unit_norm_solution(10, 3, A, x);
 
-    double c1[3], c2[3];
-    matrix_transpose_product(3, 3, 3, 1, R1, t1, c1);
-    matrix_scale(3, 1, c1, -1.0, c1);
-    matrix_transpose_product(3, 3, 3, 1, R2, t2, c2);
-    matrix_scale(3, 1, c2, -1.0, c2);
+  double c1[3], c2[3];
+  matrix_transpose_product(3, 3, 3, 1, R1, t1, c1);
+  matrix_scale(3, 1, c1, -1.0, c1);
+  matrix_transpose_product(3, 3, 3, 1, R2, t2, c2);
+  matrix_scale(3, 1, c2, -1.0, c2);
 
-    double c[3];
-    matrix_diff(3, 1, 3, 1, c2, c1, c);
+  double c[3];
+  matrix_diff(3, 1, 3, 1, c2, c1, c);
 
-    double t[3];
-    matrix_product(3, 3, 3, 1, (double *) R2, c, t);
-    matrix_scale(3, 1, t, -1.0, t);
+  double t[3];
+  matrix_product(3, 3, 3, 1, (double *) R2, c, t);
+  matrix_scale(3, 1, t, -1.0, t);
 
-    double norm = matrix_norm(3, 1, t);
-    matrix_scale(3, 1, t, 1.0 / norm, t);
+  double norm = matrix_norm(3, 1, t);
+  matrix_scale(3, 1, t, 1.0 / norm, t);
 
-    double dot;
-    matrix_product(1, 3, 3, 1, x, t, &dot);
-    printf("%0.3f %0.3f %0.3f -> %0.3f %0.3f %0.3f [ %0.3f ]\n",
+  double dot;
+  matrix_product(1, 3, 3, 1, x, t, &dot);
+  printf("%0.3f %0.3f %0.3f -> %0.3f %0.3f %0.3f [ %0.3f ]\n",
            x[0], x[1], x[2], t[0], t[1], t[2], dot);
 #endif
 
 #if 0
-    int num_eqns = m_num_points;
-    int num_vars = 3;
-    double *A = new double[num_eqns * num_vars];
+  int num_eqns = m_num_points;
+  int num_vars = 3;
+  double *A = new double[num_eqns * num_vars];
 
-    for (int i = 0; i < m_num_points; i++) {
-        v2_t p1 = v2_scale(-1.0 / m_camera0.f, proj1[i]);
-        v2_t p2 = v2_scale(-1.0 / m_camera1.f, proj2[i]);
+  for (int i = 0; i < m_num_points; i++) 
+   {
+    v2_t p1 = v2_scale(-1.0 / m_camera0.f, proj1[i]);
+    v2_t p2 = v2_scale(-1.0 / m_camera1.f, proj2[i]);
         
-        double p1a[3] = { Vx(p1), Vy(p1), 1.0 };
-        double p1b[3];
-        matrix_product(3, 3, 3, 1, m_camera1.R, p1a, p1b);
-        // p1 = v2_new(p1b[0] / p1b[2], p1b[1] / p1b[2]);
-        p1 = v2_new(p1b[0], p1b[1]);
+    double p1a[3] = { Vx(p1), Vy(p1), 1.0 };
+    double p1b[3];
+    matrix_product(3, 3, 3, 1, m_camera1.R, p1a, p1b);
+    // p1 = v2_new(p1b[0] / p1b[2], p1b[1] / p1b[2]);
+    p1 = v2_new(p1b[0], p1b[1]);
         
-        double *r = A + i * num_vars;
-        
-        r[0] = -Vy(p1) + Vy(p2) * p1b[2];
-        r[1] = Vx(p1) - Vx(p2) * p1b[2];
-        r[2] = -Vx(p1) * Vy(p2) + Vy(p1) * Vx(p2);
-    }
+    double *r = A + i * num_vars;
+     
+    r[0] = -Vy(p1) + Vy(p2) * p1b[2];
+    r[1] = Vx(p1) - Vx(p2) * p1b[2];
+    r[2] = -Vx(p1) * Vy(p2) + Vy(p1) * Vx(p2);
+   }
     
-    double x[3];
-    matrix_minimum_unit_norm_solution(num_eqns, num_vars, A, x);
+  double x[3];
+  matrix_minimum_unit_norm_solution(num_eqns, num_vars, A, x);
 
-    double c[3];
-    matrix_diff(3, 1, 3, 1, (double *) m_camera1.t, (double *) m_camera0.t, c);
+  double c[3];
+  matrix_diff(3, 1, 3, 1, (double *) m_camera1.t, (double *) m_camera0.t, c);
 
-    double t[3];
-    matrix_product(3, 3, 3, 1, (double *) m_camera1.R, c, t);
-    matrix_scale(3, 1, t, -1.0, t);
+  double t[3];
+  matrix_product(3, 3, 3, 1, (double *) m_camera1.R, c, t);
+  matrix_scale(3, 1, t, -1.0, t);
 
-    double norm = matrix_norm(3, 1, t);
-    matrix_scale(3, 1, t, 1.0 / norm, t);
+  double norm = matrix_norm(3, 1, t);
+  matrix_scale(3, 1, t, 1.0 / norm, t);
 
-    double dot;
-    matrix_product(1, 3, 3, 1, x, t, &dot);
-    printf("%0.3f %0.3f %0.3f -> %0.3f %0.3f %0.3f [ %0.3f ]\n",
-           x[0], x[1], x[2], t[0], t[1], t[2], dot);
+  double dot;
+  matrix_product(1, 3, 3, 1, x, t, &dot);
+  printf("%0.3f %0.3f %0.3f -> %0.3f %0.3f %0.3f [ %0.3f ]\n",
+         x[0], x[1], x[2], t[0], t[1], t[2], dot);
 
-    delete [] A;
+  delete [] A;
 #endif
 }
 
@@ -277,60 +297,64 @@ void WriteModelsProjections(ModelMap &models, int num_images,
                             const std::vector<TrackData> &track_data,
                             std::vector<ImageData> &image_data, char *out_file)
 {
-    bool preload_keys = true;
+bool preload_keys = true;
     
-    if (num_images > 30000)
-        preload_keys = false;
+if (num_images > 30000)
+  preload_keys = false;
 
-    if (preload_keys) {
-        for (int i = 0; i < num_images; i++) {
-            image_data[i].LoadKeys(false);
-        }
-    }
+if (preload_keys) {
+  for (int i = 0; i < num_images; i++) {
+    image_data[i].LoadKeys(false);
+   }
+ }
 
-    FILE *f = fopen(out_file, "w");
-    if (f == NULL) {
-        printf("[WriteModelsProjections] "
-               "Error opening file %s for reading\n", out_file);
-    } else {
-        fprintf(f, "%d\n", num_images);
+FILE *f = fopen(out_file, "w");
+if (f == NULL) {
+  printf("[WriteModelsProjections] Error opening file %s for reading\n", 
+                                                                    out_file);
+ } else {
+  fprintf(f, "%d\n", num_images);
 
-        // FIXME LOOP
-        for (int i = 0; i < num_images; i++) {
-            ImageData &img_i = image_data[i];
+  // FIXME LOOP
+  for (int i = 0; i < num_images; i++) 
+   {
+    ImageData &img_i = image_data[i];
             
-            if (!preload_keys)
-                image_data[i].LoadKeys(false);
+    if (!preload_keys)
+      image_data[i].LoadKeys(false);
 
-            for (int j = i+1; j < num_images; j++) {
-                if (models.Contains(GetMatchIndex(i, j))) {
-                    if (!preload_keys)
-                        image_data[j].LoadKeys(false);
+    for (int j = i+1; j < num_images; j++) 
+     {
+      if (models.Contains(GetMatchIndex(i, j))) 
+       {
+        if (!preload_keys)
+          image_data[j].LoadKeys(false);
 
-                    ImageData &img_j = image_data[j];
+        ImageData &img_j = image_data[j];
 
-                    fprintf(f, "%d %d\n", i, j);
-                    models.GetModel(GetMatchIndex(i,j)).
-                        WriteWithProjections(f, track_data, i, j, 
-                                             img_i, img_j);
+        fprintf(f, "%d %d\n", i, j);
+        models.GetModel(GetMatchIndex(i,j)).  
+                      WriteWithProjections(f, track_data, i, j, img_i, img_j);
 
-                    if (!preload_keys)
-                        image_data[j].UnloadKeys();
-                }
-            }
+        if (!preload_keys)
+          image_data[j].UnloadKeys();
+       }
+     }
 
-            if (!preload_keys)
-                image_data[i].UnloadKeys();
-        }
+    if (!preload_keys)
+      image_data[i].UnloadKeys();
+   }
         
-        fclose(f);
-    }
+  fclose(f);
+ }
 
-    if (!preload_keys) {
-        for (int i = 0; i < num_images; i++) {
-            image_data[i].UnloadKeys();
-        }
-    }
+if (!preload_keys) 
+ {
+  for (int i = 0; i < num_images; i++) 
+   {
+    image_data[i].UnloadKeys();
+   }
+ }
 }
 #endif
 
@@ -392,381 +416,6 @@ static void FixScaffoldEdges(int num_images, ModelMap &models)
             }
         }
     }
-}
-
-ModelMap SkeletalApp::BundleAllPairs(char *out_file, 
-                                     bool bundle_from_tracks, 
-                                     bool detect_duplicates) 
-{
-    unsigned int num_images = GetNumImages();
-
-    if (out_file != NULL) {
-        FILE *f = fopen(out_file, "r");
-
-        bool load_pruned = false;
-        if (strstr(out_file, "pruned"))
-            load_pruned = true;
-
-        if (f != NULL) {
-            ModelMap models = ReadModels(f);
-            // p_edges_out = ReadPEdges(fp, num_images);
-            FixScaffoldEdges(num_images, models);
-            ThresholdTwists(num_images, models, m_image_data, true);
-            fclose(f);
-            return models;
-        }
-    }
-
-    /* Sort images by connectivity */
-    double *connectivity = new double[num_images];
-    // bool *connected = new bool[num_images * num_images];
-
-#define MATCH_THRESHOLD 28   // 16
-
-    for (unsigned int i = 0; i < num_images; i++)
-        connectivity[i] = 0.0;
-
-    // for (int i = 0; i < num_images * num_images; i++) {
-    //     connected[i] = false;
-    // }
-
-    unsigned long long num_connections = 0;
-    for (unsigned int i = 0; i < num_images; i++) {
-        if (!m_image_data[i].m_has_init_focal)
-            continue;
-
-        MatchAdjList::iterator iter;
-
-        // for (int j = i+1; j < num_images; j++) {
-        for (iter = m_matches.Begin(i); iter != m_matches.End(i); iter++) {
-            unsigned int j = iter->m_index;
-
-            if (!m_image_data[j].m_has_init_focal)
-                continue;
-
-            if (i >= j) 
-                continue;
-
-            int num_matches; 
-            
-            if (bundle_from_tracks) {
-                if (!ImagesMatch(i, j))
-                    continue;
-                num_matches = GetNumTrackMatches(i,j);
-            } else { 
-                num_matches = GetNumMatches(i, j);
-            }
-            
-            if (num_matches >= MATCH_THRESHOLD) {
-                connectivity[i] += 1.0;
-                connectivity[j] += 1.0;
-                // connected[i * num_images + j] = true;
-                // connected[j * num_images + i] = true;
-                num_connections++;
-            }
-        }
-    }
-
-#if 0
-    int *perm = new int[num_images];
-    qsort_descending();
-    qsort_perm(num_images, connectivity, perm);
-
-    for (int i = 0; i < num_images; i++) {
-        printf("connect[ %d ] = %0.3f\n", perm[i], connectivity[i]);
-    }
-
-    delete [] connectivity;
-#else
-    for (unsigned int i = 0; i < num_images; i++) {
-        printf("connect[ %d ] = %0.3f\n", i, connectivity[i]);
-    }
-#endif
-
-    double *match_array = new double[num_connections];
-    unsigned long *indices = new unsigned long [num_connections];
-    
-    int count = 0;
-    for (unsigned int i = 0; i < num_images; i++) {
-        if (!m_image_data[i].m_has_init_focal)
-            continue;
-
-        // for (int j = i+1; j < num_images; j++) {
-        MatchAdjList::iterator iter;
-
-        for (iter = m_matches.Begin(i); iter != m_matches.End(i); iter++) {
-            unsigned int j = iter->m_index;
-
-            if (!m_image_data[j].m_has_init_focal)
-                continue;
-
-            if (i >= j) 
-                continue;
-
-            int num_matches;
-            
-            if (bundle_from_tracks) {                    
-                if (!ImagesMatch(i, j))
-                    continue;
-                num_matches = GetNumTrackMatches(i,j);
-            } else { 
-                num_matches = GetNumMatches(i, j);
-            }
-            
-            if (num_matches >= MATCH_THRESHOLD) {
-                match_array[count] = (double) num_matches;
-                indices[count] = 
-                    (unsigned long long) i * num_images + 
-                    (unsigned long long) j;
-                count++;
-            }
-        }
-    }
-    
-    int *order = new int[num_connections];
-    qsort_perm((int) num_connections, match_array, order);
-    delete [] match_array;
-
-    bool preload_keys = true;
-    if (num_images > 30000)
-        preload_keys = false;
-
-    if (preload_keys) {
-        for (unsigned int i = 0; i < num_images; i++) {
-            if (m_image_data[i].m_has_init_focal) {
-                printf("[BundleAllPairs] Loading keys for image %d\n", i);
-                m_image_data[i].LoadKeys(false, !m_optimize_for_fisheye);
-
-                if (bundle_from_tracks) {
-                    printf("[BundleAllPairs] Setting tracks for image %d\n", 
-                           i);
-                    SetTracks(i);
-                }
-
-                fflush(stdout);
-            }
-        }
-    }
-
-    ModelMap models(num_images);
-
-    int *depends = new int[num_images];
-
-    for (unsigned int i = 0; i < num_images; i++) {
-        depends[i] = -1;
-    }
-    
-    // for (int i = 0; i < num_images; i++) {
-    for (unsigned long i = 0; i < num_connections; i++) {
-        unsigned long long index = indices[order[i]];
-
-        unsigned long i1 = index / num_images;
-        unsigned long i2 = index - i1 * num_images;
-        
-        if (connectivity[i2] > connectivity[i1]) {
-            int tmp = i1;
-            i1 = i2;
-            i2 = tmp;
-        }
-
-        // int i1 = perm[i];
-        if (depends[i1] != -1)
-            continue;
-
-        if (!m_image_data[i1].m_has_init_focal)
-            continue;
-        
-        if (!preload_keys) {
-            m_image_data[i1].LoadKeys(false, !m_optimize_for_fisheye);
-            SetTracks(i1);
-        }
-
-        // for (int j = i+1; j < num_images; j++) {
-        // int i2 = perm[j];
-
-        if (depends[i2] != -1)
-            continue;
-
-        if (!m_image_data[i2].m_has_init_focal)
-            continue;
-
-        if (bundle_from_tracks) {
-            if (GetNumTrackMatches(i1, i2) < MATCH_THRESHOLD)
-                continue;
-        } else {
-            if (GetNumMatches(i1, i2) < MATCH_THRESHOLD)
-                continue;
-        }
-
-        printf("[SifterApp::BundleAllPairs] Bundling (%lu,%lu)\n", i1, i2);
-        fflush(stdout);
-
-        if (!preload_keys) {
-            m_image_data[i2].LoadKeys(false, !m_optimize_for_fisheye);
-            SetTracks(i2);
-        }
-            
-        unsigned int i_min = MIN(i1, i2);
-        unsigned int i_max = MAX(i1, i2);
-
-        TwoFrameModel model;
-
-        clock_t start = clock();
-        double angle = 0.0;
-        int num_matches = 0;
-        bool success = 
-            BundleTwoFrame(i_min, i_max, 
-                           &model, angle, num_matches, 
-                           bundle_from_tracks);
-        fflush(stdout);
-
-#define MAX_DUPLICATE_ANGLE 0.5 // 1.0 // 0.5 // 1.0 // 2.5
-#define MIN_DUPLICATE_MATCHES 64
-
-        bool dependent = false;
-        if (detect_duplicates && angle < MAX_DUPLICATE_ANGLE && 
-            num_matches > MIN_DUPLICATE_MATCHES) {
-            
-            /* Check if i2 is adjacent to any nodes that i1 is not
-             * adjacent to */
-
-            // bool found = false;
-            int num_found = 0;
-            // for (int k = 0; k < num_images; k++) {
-            //     if (k == i1 || k == i2)
-            //         continue;
-
-            MatchAdjList::iterator iter;
-            
-            for (iter = m_matches.Begin(i2); 
-                 iter != m_matches.End(i2); 
-                 iter++) {
-
-                unsigned long k = iter->m_index;
-
-                if (k == i1 || k == i2)
-                    continue;
-
-                // if (!connected[i1 * num_images + k] &&
-                //     connected[i2 * num_images + k]) {
-                if ((bundle_from_tracks && 
-                     GetNumTrackMatches(i1,k) < MATCH_THRESHOLD &&
-                     GetNumTrackMatches(i2,k) >= MATCH_THRESHOLD) ||
-                    (!bundle_from_tracks &&
-                     (GetNumMatches(i1,k) < MATCH_THRESHOLD || 
-                      GetNumMatches(i2,k) >= MATCH_THRESHOLD))) {
-
-                    int num_matches_i2k;
-                    if (bundle_from_tracks)
-                        num_matches_i2k = GetNumTrackMatches(i2, k);
-                    else
-                        num_matches_i2k = GetNumMatches(i2, k);
-
-                    if (num_matches_i2k > 64) {
-                        printf("  Image %lu is connected to %lu (%d matches) "
-                               "but not %lu\n",
-                               k, i2, num_matches_i2k, i1);
-
-                        // found = true;
-                        // break;
-
-                        num_found++;
-                    }
-                }
-            }
-                
-            if (num_found < 1 /*MAX(1.0, 0.002 * num_images)*/) {
-                /* Make node i2 dependent on node i1 */
-                printf("[SifterApp::BundleAllPairs] "
-                       "Node %lu depends on node %lu\n", i2, i1);
-
-                dependent = true;
-                depends[i2] = i1;
-
-                /* Get rid of other models with i2 */
-                // for (int k = 0; k < i2; k++) {
-                for (iter = m_matches.Begin(i2); 
-                     iter != m_matches.End(i2); 
-                     iter++) {
-                    
-                    unsigned long k = iter->m_index;
-
-                    // int idx = k * num_images + i2;
-                    MatchIndex idx = GetMatchIndexUnordered(k, i2);
-                    if (models.Contains(idx)) {
-                        printf("  Removed model (%lu,%lu)\n", k, i2);
-                        models.RemoveModel(idx);
-                    }
-                }
-                
-#if 0
-                // FIXME LOOP
-                for (int k = i2 + 1; k < num_images; k++) {
-                    // int idx = i2 * num_images + k;
-                    MatchIndex idx = GetMatchIndex(i2, k);
-                    if (models.Contains(idx)) {
-                        printf("  Removed model (%d,%d)\n", i2, k);
-                        models.RemoveModel(idx);
-                    }
-                }
-#endif
-            }
-        }
-
-        if (!dependent && success) {
-            printf("[SifterApp::BundleAllPairs] "
-                   "(%lu,%lu) successfully bundled\n", i1, i2);
-            
-            if (model.ComputeTrace(true) < 0.0) {
-                printf("  Error! trace2 < 0.0!\n");
-            }
-                
-            if (model.ComputeTrace(false) < 0.0) {
-                printf("  Error! trace1 < 0.0!\n");
-            } else {
-                MatchIndex idx = GetMatchIndex(i_min, i_max);
-                models.AddModel(idx, model);
-            }
-        } else if (!dependent) {
-            printf("[BundleAllPairs] (%lu,%lu) bundle FAILED\n", i1, i2);
-        }
-
-        clock_t end = clock();
-        
-        double t = (end - start) / (double) CLOCKS_PER_SEC;
-        printf("[BundleAllPairs] Bundle took %0.3fs\n", t);
-        
-        if (!preload_keys) {
-            m_image_data[i2].UnloadKeys();
-        }
-        //}
-
-        if (!preload_keys) {
-            m_image_data[i1].UnloadKeys();
-        }
-    }
-
-    delete [] indices;
-    delete [] order;
-
-    if (out_file != NULL) {
-        WriteModels(models, num_images, out_file);
-        // WriteModelsProjections(models, num_images, 
-        //                        m_track_data, m_image_data, 
-        //                        "pairs.proj.out");
-        // WritePEdges(p_edges, num_images, "pedges.out");
-    }
-    fflush(stdout);
-
-    // p_edges_out = p_edges;
-
-    delete [] depends;
-#if 0
-    delete [] perm;
-#endif
-    delete [] connectivity;
-
-    return models;
 }
 
 
@@ -2396,3 +2045,7 @@ void BundlerApp::ComputeCameraCovariance()
     fclose(f);
 }
 #endif
+
+/*
+*/
+/*============================== BundleTwo =============================*/

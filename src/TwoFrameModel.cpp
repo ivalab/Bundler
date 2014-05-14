@@ -103,6 +103,10 @@ else
 }
 
 
+/*====================================================================*/
+/*=========================== TwoFrameModel ==========================*/
+/*====================================================================*/
+//-----{
 
 /*=========================== TwoFrameModel ==========================*/
 /*
@@ -445,11 +449,107 @@ else
 }
 
 
+//}-----
+/*======================================================================*/
+/*============================== ModelMap ==============================*/
+/*======================================================================*/
+//-----{
+
+ModelMap::ModelMap() 
+  { }
+
+ModelMap::ModelMap(int num_images) 
+ {
+  m_models.resize(num_images);
+  m_neighbors.resize(num_images);
+ }
+
+void ModelMap::AddModel(MatchIndex idx, const TwoFrameModel &model) 
+ {
+  assert(idx.first < idx.second);
+
+  if (Contains(idx))
+    return;  // already set
+
+  /* Add the model to the hash */
+  m_models[idx.first][idx.second] = model;
+
+  std::list<unsigned int> tmp;
+  tmp.push_back(idx.second);
+  m_neighbors[idx.first].merge(tmp);
+
+  // tmp.pop_back();
+  tmp.clear();
+  tmp.push_back(idx.first);
+  m_neighbors[idx.second].merge(tmp);
+ }
+
+void ModelMap::RemoveModel(MatchIndex idx) 
+ {
+  assert(idx.first < idx.second);
+
+  if (Contains(idx)) 
+   {
+    m_models[idx.first].erase(idx.second);
+
+    // Remove the neighbor
+    std::list<unsigned int> &l = m_neighbors[idx.first];
+    std::pair<std::list<unsigned int>::iterator,
+    std::list<unsigned int>::iterator> p = 
+    equal_range(l.begin(), l.end(), idx.second);
+
+    assert(p.first != p.second);
+    l.erase(p.first, p.second);
+
+    std::list<unsigned int> &l2 = m_neighbors[idx.second];
+    p = equal_range(l2.begin(), l2.end(), idx.first);
+
+    assert(p.first != p.second);
+    l2.erase(p.first, p.second);
+   }
+ }
+
+TwoFrameModel& ModelMap::GetModel(MatchIndex idx) 
+ {
+  assert(idx.first < idx.second);
+  assert(Contains(idx));
+  return m_models[idx.first][idx.second];
+ }
+
+bool ModelMap::Contains(MatchIndex idx) const 
+ {
+  assert(idx.first < idx.second);
+  return (m_models[idx.first].find(idx.second) != 
+  m_models[idx.first].end());
+ }
+
+void ModelMap::RemoveAll() 
+ {
+  int num_lists = m_models.size();
+  for (int i = 0; i < num_lists; i++) 
+   {
+    m_models[i].clear();
+    m_neighbors[i].clear();
+   }
+ }
+
+std::list<unsigned int>& ModelMap::GetNeighbors(unsigned int i) 
+ {
+  return m_neighbors[i];
+ }
+
+ModelTable::iterator ModelMap::Begin(unsigned int i) 
+ {
+  return m_models[i].begin();
+ }
+
+ModelTable::iterator ModelMap::End(unsigned int i) 
+ {
+  return m_models[i].end();
+ }
 
 
-
-
-
+//}-----
 /*======================================================================*/
 /*===================== ModelMap Utility Functions =====================*/
 /*======================================================================*/

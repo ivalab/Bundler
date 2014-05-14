@@ -70,10 +70,22 @@
 extern int optind;
 
 
+/*---------------------------- BundlerApp ----------------------------*/
+/*
+   Constructor for the bundler app.  A good portion of the constructor
+   is spent setting member variables to default values.
+*/
 BundlerApp::BundlerApp()
 {
 /* Set initial values */
-m_bundle_version = 0.1;
+m_bundle_version = 0.1;     
+//TODO: Seems to be version 0.1?  So later versions are not publicized?
+//TODO: Could they be what photosynth is, and actually improved over this?
+//TODO: If so, then what value is there in getting Bundler running?
+//NOTE: Downloaded v0.4 and it seems to be labelled as v0.1 like this one.
+//NOTE: Possible that changing it changes its execution.  There are if
+//NOTE: checks all over the map for version.
+//TODO: Compare with v0.3 to see how that one is.
 
 m_fisheye = false;
 m_fixed_focal_length = true;
@@ -907,44 +919,32 @@ getch();
 
 /*------------------------------ OnInit ------------------------------*/
 /*
-    This is the main execution threa of bundler.  It takes the 
+    This is the main execution thread of bundler.  It takes the 
     processed arguments and runs the optimization described in the
     paper.
+
+    TODO: OnInit seems to be a pretty bad name.  Shouldn't it be
+    TODO:  called genBundle or something that more readily indicates
+    TODO:  what is going on?
+    TODO: It seems to be the catchall/doall member function with multiple
+    TODO:  outcomes depending on chosen flags.  Need to identify what
+    TODO:  is the baseline execution for a first time bundle run.
+    TODO: That code should probably be in its own member function.
+    TODO: Should then slowly deconstruct this particular function and
+    TODO:  break out into a few.
 */
 bool BundlerApp::OnInit()
 {
-printf("[OnInit] Running program %s\n", argv[0]);
 
 char *imageList;
-    
 bool load_file = false;
-//TODO: What do do with these commented out portions?  What are they for?
-//TODO:   Will delete or move to somekind of patch file I think. PAV 2014/05/11
-// bool fisheye = false;
-// bool dump_images = false;
-// bool dump_output = false, dump_output_all = false;
-// bool fixed_focal_length = true;
-// bool bundle_provided = false;
-// bool bg_provided = false;
-// bool load_images = false, load_keys = false, load_matches = false;
-// bool use_constraints = false;
-// double init_focal_length = 532.0;
-// double k1 = 0.0, k2 = 0.0;
-// int init_pair[2] = { -1, -1 };
 
-// char *fisheye_params = NULL;
-// char *output_file = NULL, *output_base = NULL;
-// char *bundle_file = NULL;
-// char *bg_file = NULL;
-// char *match_directory = ".";
-// char *output_directory = ".";
-// char *sift_binary = SIFT_COMMAND;
-
-// m_bg_file = NULL;
+//--[1] Process the command line options.
+printf("[BundlerApp::OnInit] Running program %s\n", argv[0]);
 
 if (argc >= 2) 
  {
-  printf("Loading images from file '%s'\n", argv[1]);
+  printf("[BundlerApp::OnInit] Loading images from file '%s'\n", argv[1]);
   imageList = argv[1];
   load_file = true;
  } 
@@ -970,7 +970,10 @@ if (m_fixed_focal_length && m_estimate_distortion)
   exit(1);
  }
 
-printf("[BundlerApp::OnInit] Loading frame...\n");
+//--[X] Code appears to be for instantiating a window interface.
+//        It is not used here as the execution has only text output.
+
+//printf("[BundlerApp::OnInit] Loading frame...\n");
 
 //TODO: More commented code.  Delete/move to patch? PAV 2014/05/11
 // bool use_window = false;
@@ -986,6 +989,12 @@ wxFrame *frame2 = new wxFrame(NULL, wxID_ANY, str,
 printf("tested frame\n");
 #endif
 
+//--[X] Output indicates thatimages are loaded, but here it appears that
+//        only one image is loaded, the first, unless the fisheye flag
+//        is set.
+//        Or, as it seems, the list of images is loaded from a file
+//        for true image loading at a later time.
+//        The text output is misleading.
 printf("[BundlerApp::OnInit] Loading images...\n");
 fflush(stdout);
 if (load_file) 
@@ -1053,6 +1062,8 @@ else if (input_model == MODEL_OBJECT_MOVIE)
 #else
 
 #ifndef __DEMO__
+
+//--[X] Re-run bundler then exit.
 if (m_rerun_bundle) 
  {
   //ReadCameraConstraints();
@@ -1071,10 +1082,10 @@ if (m_rerun_bundle)
   exit(0);
  }
 
+
+//--[X] If not re-running, then this should be first run, no?
 if (m_use_constraints) 
- {
   ReadCameraConstraints();
- }
 
 if (m_ignore_file != NULL) 
  {
@@ -1082,6 +1093,8 @@ if (m_ignore_file != NULL)
   ReadIgnoreFile();
  }
 #endif
+//TODO: Above/below code is the same for NOT DEMO mode.
+//TODO: Of course bundler compiles in NOT DEMO mode.
 if (m_ignore_file != NULL) 
  {
   printf("[BundlerApp::OnInit] Reading ignore file...\n");
@@ -1180,8 +1193,7 @@ if (m_bundle_provided)
     SetMatchesFromPoints(MIN_POINT_VIEWS);
     // WriteMatchTableDrew(".final");            
 
-    printf("[BundlerApp::OnInit] "
-    "Setting up image points and lines...\n");
+    printf("[BundlerApp::OnInit] Setting up image points and lines...\n");
     SetupImagePoints(/*2*/ MIN_POINT_VIEWS);
     RemoveBadImages(6);
 
@@ -1264,6 +1276,8 @@ return true;
 
 static BundlerApp *bundler_app = NULL;
 
+//TODO: THE FUNCTION BELOW IS NOT USED AT ALL.  MAYBE ONCE WHEN THERE
+//        WAS GRAPHICAL OUTPUT.  NOW THAT IS NOT THE CASE.
 BundlerApp &wxGetApp() 
 {
 return *bundler_app;
@@ -1284,8 +1298,10 @@ int main(int argc, char **argv)
 // mtrace();
 
 bundler_app = new BundlerApp();
-bundler_app->argc = argc;
-bundler_app->argv = argv;
+bundler_app->argc = argc;   //TODO: In my mind, it is kind of sloppy to
+bundler_app->argv = argv;   //TODO:  set member variables argc/argv.
+                            //TODO: They should be processed through a
+                            //TODO:  member function.
 
 bundler_app->OnInit();
 }

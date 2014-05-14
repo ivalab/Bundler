@@ -54,6 +54,9 @@
 #  include <hash_map>
 #endif
 
+
+/*============================ TwoFrameModel ===========================*/
+
 class TwoFrameModel 
 {
 
@@ -107,6 +110,8 @@ public:
 };
 
 
+/*============================== ModelMap ==============================*/
+
 #ifdef WIN32
 typedef stdext::hash_map<unsigned int, TwoFrameModel > ModelTable;
 #else
@@ -117,103 +122,28 @@ class ModelMap
 {
 public:
 
-  ModelMap() 
-    { }
+  ModelMap();
+  ModelMap(int num_images);
 
-  ModelMap(int num_images) 
-   {
-    m_models.resize(num_images);
-    m_neighbors.resize(num_images);
-   }
-
-  void AddModel(MatchIndex idx, const TwoFrameModel &model) 
-   {
-    assert(idx.first < idx.second);
-
-    if (Contains(idx))
-      return;  // already set
-
-    /* Add the model to the hash */
-    m_models[idx.first][idx.second] = model;
-
-    std::list<unsigned int> tmp;
-    tmp.push_back(idx.second);
-    m_neighbors[idx.first].merge(tmp);
-
-    // tmp.pop_back();
-    tmp.clear();
-    tmp.push_back(idx.first);
-    m_neighbors[idx.second].merge(tmp);
-   }
-
-  void RemoveModel(MatchIndex idx) 
-   {
-    assert(idx.first < idx.second);
-
-    if (Contains(idx)) 
-     {
-      m_models[idx.first].erase(idx.second);
-
-      // Remove the neighbor
-      std::list<unsigned int> &l = m_neighbors[idx.first];
-      std::pair<std::list<unsigned int>::iterator,
-      std::list<unsigned int>::iterator> p = 
-      equal_range(l.begin(), l.end(), idx.second);
-
-      assert(p.first != p.second);
-      l.erase(p.first, p.second);
-
-      std::list<unsigned int> &l2 = m_neighbors[idx.second];
-      p = equal_range(l2.begin(), l2.end(), idx.first);
+  void AddModel(MatchIndex idx, const TwoFrameModel &model);
+  void RemoveModel(MatchIndex idx);
+  void RemoveAll();
+  TwoFrameModel& GetModel(MatchIndex idx);
  
-      assert(p.first != p.second);
-      l2.erase(p.first, p.second);
-     }
-   }
+  bool Contains(MatchIndex idx) const;
 
-  TwoFrameModel &GetModel(MatchIndex idx) 
-   {
-    assert(idx.first < idx.second);
-    assert(Contains(idx));
-    return m_models[idx.first][idx.second];
-   }
+  std::list<unsigned int>& GetNeighbors(unsigned int i);
  
-  bool Contains(MatchIndex idx) const 
-   {
-    assert(idx.first < idx.second);
-    return (m_models[idx.first].find(idx.second) != 
-    m_models[idx.first].end());
-   }
-
-  void RemoveAll() 
-   {
-    int num_lists = m_models.size();
-    for (int i = 0; i < num_lists; i++) 
-     {
-      m_models[i].clear();
-      m_neighbors[i].clear();
-     }
-   }
-
-  std::list<unsigned int> &GetNeighbors(unsigned int i) 
-   {
-    return m_neighbors[i];
-   }
- 
-  ModelTable::iterator Begin(unsigned int i) 
-   {
-    return m_models[i].begin();
-   }
- 
-  ModelTable::iterator End(unsigned int i) 
-   {
-    return m_models[i].end();
-   }
+  ModelTable::iterator Begin(unsigned int i);
+  ModelTable::iterator End(unsigned int i);
     
 private:
   std::vector<ModelTable> m_models;
   std::vector<std::list<unsigned int> > m_neighbors;
 };
+
+
+/*========================== Utility Functions =========================*/
 
 #ifndef WIN32
 typedef __gnu_cxx::hash_map<int, bool> PEdgeMap;

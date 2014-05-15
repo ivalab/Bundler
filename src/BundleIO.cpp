@@ -741,168 +741,124 @@ void BaseApp::ClearModel()
 
 
 #ifndef __DEMO__
-/* Dump an output file containing information about the current
-* state of the world */
+/*-------------------------- DumpOutputFile --------------------------*/
+/* 
+   Dump an output file containing information about the current state 
+   of the world 
+
+   TODO: Since radial distortion flag not really used, should remove.
+*/
 void BaseApp::DumpOutputFile(char *output_dir, char *filename, 
                              int num_images, int num_cameras, int num_points,
                              int *added_order, 
                              camera_params_t *cameras, 
                              v3_t *points, v3_t *colors,
-                             std::vector<ImageKeyVector> &pt_views
-                             /*bool output_radial_distortion*/)
+                             std::vector<ImageKeyVector> &pt_views)
 {
-    clock_t start = clock();
-
-    int num_visible_points = 0;
+clock_t start = clock();
+int num_visible_points = 0;
     
-    for (int i = 0; i < num_points; i++) {
-        if (pt_views[i].size() > 0)
-            num_visible_points++;
-    }
+for (int i = 0; i < num_points; i++) 
+ {
+  if (pt_views[i].size() > 0)
+    num_visible_points++;
+ }
 
-    char buf[256];
-    sprintf(buf, "%s/%s", output_dir, filename);
 
-    FILE *f = fopen(buf, "w");
-    if (f == NULL) {
-        printf("Error opening file %s for writing\n", buf);
-        return;
-    }
+//--[1] Open the file for writing.
+char buf[256];
+sprintf(buf, "%s/%s", output_dir, filename);
 
-    // if (output_radial_distortion) {
-    /* Print version number */
-    // fprintf(f, "# Bundle file v0.4\n");
-    fprintf(f, "# Bundle file v0.3\n");
-    // }
+FILE *f = fopen(buf, "w");
+if (f == NULL)  
+ {
+  printf("Error opening file %s for writing\n", buf);
+  return;
+ }
 
-    fprintf(f, "%d %d\n", num_images, num_visible_points);
+//--[2] Output preamble/header information (include #images and #points).
+fprintf(f, "# Bundle file v%3.1f\n", m_bundle_version);
+fprintf(f, "%d %d\n", num_images, num_visible_points);
 
-    /* Dump cameras */
-    for (int i = 0; i < num_images; i++) {
+//--[3] Output the camera information.
+for (int i = 0; i < num_images; i++) 
+ {
+  int idx = -1;
+  for (int j = 0; j < num_cameras; j++) 
+    if (added_order[j] == i) 
+     {
+      idx = j;      // Find when camera used in SBA, record it's order.
+      break;
+     }
 
-#if 0
-        /* Print the name of the file */
-        fprintf(f, "%s %d %d\n", 
-                m_image_data[i].m_name, 
-                m_image_data[i].GetWidth(), m_image_data[i].GetHeight());
-#endif
+  if (idx == -1)    // Camera not used in SBA, so output zeros as parameters.
+   {
+    fprintf(f, "0 0 0\n");
+    fprintf(f, "0 0 0\n0 0 0\n0 0 0\n0 0 0\n");
+   } 
+  else              // Camera used in SBA, so output camera information.
+   {
+    double t[3];    // Build the T vector (Yicky, but OK).
+    matrix_product(3, 3, 3, 1, cameras[idx].R, cameras[idx].t, t);
+    matrix_scale(3, 1, t, -1.0, t);
 
-        int idx = -1;
-        for (int j = 0; j < num_cameras; j++) {
-            if (added_order[j] == i) {
-                idx = j;
-                break;
-            }
-        }
+    fprintf(f, "%0.10e %0.10e %0.10e\n", 
+               cameras[idx].f, cameras[idx].k[0], cameras[idx].k[1]);
+    fprintf(f, "%0.10e %0.10e %0.10e\n", 
+                cameras[idx].R[0], cameras[idx].R[1], cameras[idx].R[2]);
+    fprintf(f, "%0.10e %0.10e %0.10e\n", 
+                cameras[idx].R[3], cameras[idx].R[4], cameras[idx].R[5]);
+    fprintf(f, "%0.10e %0.10e %0.10e\n", 
+                cameras[idx].R[6], cameras[idx].R[7], cameras[idx].R[8]);
+    fprintf(f, "%0.10e %0.10e %0.10e\n", t[0], t[1], t[2]);
+   }
+ }
 
-        if (idx == -1) {
-            // if (!output_radial_distortion)
-            //     fprintf(f, "0\n");
-            // else
-            fprintf(f, "0 0 0\n");
-            fprintf(f, "0 0 0\n0 0 0\n0 0 0\n0 0 0\n");
-        } else {
-            // if (!output_radial_distortion)
-            //     fprintf(f, "%0.10e\n", cameras[idx].f);
-            // else
-            fprintf(f, "%0.10e %0.10e %0.10e\n", 
-                    cameras[idx].f, cameras[idx].k[0], cameras[idx].k[1]);
+//--[4] Output the sparse set of 3D points and visibility+keypoint info.
+for (int i = 0; i < num_points; i++) 
+ {
+  int num_visible = (int) pt_views[i].size();
 
-            fprintf(f, "%0.10e %0.10e %0.10e\n", 
-                cameras[idx].R[0], 
-                cameras[idx].R[1], 
-                cameras[idx].R[2]);
-            fprintf(f, "%0.10e %0.10e %0.10e\n", 
-                cameras[idx].R[3], 
-                cameras[idx].R[4], 
-                cameras[idx].R[5]);
-            fprintf(f, "%0.10e %0.10e %0.10e\n", 
-                cameras[idx].R[6], 
-                cameras[idx].R[7], 
-                cameras[idx].R[8]);
+  if (num_visible > 0) 
+   {
+    //--[4.1] Position
+    fprintf(f, "%0.10e %0.10e %0.10e\n", 
+               Vx(points[i]), Vy(points[i]), Vz(points[i]));
+    //--[4.2] Color
+    fprintf(f, "%d %d %d\n", 
+          iround(Vx(colors[i])), iround(Vy(colors[i])), iround(Vz(colors[i])));
 
-            double t[3];
-            matrix_product(3, 3, 3, 1, cameras[idx].R, cameras[idx].t, t);
-            matrix_scale(3, 1, t, -1.0, t);
-            fprintf(f, "%0.10e %0.10e %0.10e\n", t[0], t[1], t[2]);
-        }
-    }
-
-    /* Dump points */
-    for (int i = 0; i < num_points; i++) {
-        int num_visible = (int) pt_views[i].size();
-
-        if (num_visible > 0) {
-
-            /* Position */
-            fprintf(f, "%0.10e %0.10e %0.10e\n", 
-                    Vx(points[i]), Vy(points[i]), Vz(points[i]));
-            // Vx(points[idx]), Vy(points[idx]), Vz(points[idx]));
-
-            /* Color */
-            fprintf(f, "%d %d %d\n", 
-                    iround(Vx(colors[i])), 
-                    iround(Vy(colors[i])), 
-                    iround(Vz(colors[i])));
-
-            int num_visible = (int) pt_views[i].size();
-            fprintf(f, "%d", num_visible);
-            for (int j = 0; j < num_visible; j++) {
-                int img = added_order[pt_views[i][j].first];
-                int key = pt_views[i][j].second;
+    //--[4.3] Images/views found in (image, key, image coordinate).
+    //int num_visible = (int) pt_views[i].size(); //TODO: Redundant. 11 lns up.
+    fprintf(f, "%d", num_visible);
+    for (int j = 0; j < num_visible; j++) 
+     {
+      int img = added_order[pt_views[i][j].first];
+      int key = pt_views[i][j].second;
                 
-                double x = m_image_data[img].m_keys[key].m_x;
-                double y = m_image_data[img].m_keys[key].m_y;
+      double x = m_image_data[img].m_keys[key].m_x;
+      double y = m_image_data[img].m_keys[key].m_y;
                 
-                fprintf(f, " %d %d %0.4f %0.4f", img, key, x, y);
-            }
+      fprintf(f, " %d %d %0.4f %0.4f", img, key, x, y);
+     }
             
-            fprintf(f, "\n");
-        }
-    }
+    fprintf(f, "\n");
+   }
+ }
 
-#if 0
-    /* Finally, dump all outliers */
-    ImageKeyVector outliers;
-    for (int i = 0; i < num_images; i++) {
-        /* Find the index of this camera in the ordering */
-        int idx = -1;
-        for (int j = 0; j < num_cameras; j++) {
-            if (added_order[j] == i) {
-                idx = j;
-                break;
-            }
-        }
+fclose(f);
+clock_t end = clock();
 
-        if (idx == -1) continue;
-
-        int num_keys = GetNumKeys(i);
-        for (int j = 0; j < num_keys; j++) {
-            if (GetKey(i,j).m_extra == -2) {
-                outliers.push_back(ImageKey(i,j));
-            }
-        }
-    }
-
-    int num_outliers = (int) outliers.size();
-    fprintf(f, "%d\n", num_outliers);
-
-    for (int i = 0; i < num_outliers; i++) {
-        fprintf(f, "%d %d\n", outliers[i].first, outliers[i].second);
-    }
-#endif
-
-    fclose(f);
-
-    clock_t end = clock();
-
-    printf("[SifterApp::DumpOutputFile] Wrote file in %0.3fs\n",
-        (double) (end - start) / (double) CLOCKS_PER_SEC);
+printf("[BaseApp::DumpOutputFile] Wrote file in %0.3fs\n",
+                            (double) (end - start) / (double) CLOCKS_PER_SEC);
 }
 #endif
 
 
-/* Write XML files */
+/*-------------------------- WriteCamerasXML -------------------------*/
+/* 
+   Write XML files 
+*/
 
 /* Camera I/O */
 void BaseApp::WriteCamerasXML(const char *filename)
@@ -910,7 +866,7 @@ void BaseApp::WriteCamerasXML(const char *filename)
     FILE *f = fopen(filename, "w");
 
     if (f == NULL) {
-	printf("[SifterApp::WriteCamerasXML] "
+	printf("[BaseApp::WriteCamerasXML] "
 	       "Error opening file %s for writing\n", filename);
 	return;
     }

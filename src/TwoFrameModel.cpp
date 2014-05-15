@@ -18,7 +18,7 @@
 /*
 
    Author:      Noah Snavely            [original]
-   Maintainer:  Patricio A. Vela,       pvela@gatech.edu
+   Modified:    Patricio A. Vela,       pvela@gatech.edu
 
    Date:        2014/05/13
 

@@ -7,4 +7,5 @@ src/Bundle2Vis
 src/KeyMatchFull
 src/RadialUndistort
 src/bundler
+src/unused
 examples

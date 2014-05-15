@@ -1526,8 +1526,12 @@ std::vector<ImagePair> BundlerApp::FindCamerasWithNMatches(int n,
 * adjustment */
 #define INIT_REPROJECTION_ERROR 16.0 /* 6.0 */ /* 8.0 */
 
-/* Pick a good initial pair of cameras to bootstrap the bundle
- * adjustment */
+/*----------------------- BundlePickInitialPair ----------------------*/
+/* 
+   Pick a good initial pair of cameras to bootstrap the bundle
+   adjustment.  If specified, then roll with those rather than trying
+   to guesstimate a pair.
+*/
 void BundlerApp::BundlePickInitialPair(int &i_best, int &j_best, 
                                        bool use_init_focal_only)
 {
@@ -2018,467 +2022,459 @@ void BundlerApp::EstimateIgnoredCameras(int &curr_num_cameras,
         curr_num_pts, curr_num_cameras, points, colors, cameras);
 }
 
-/* Compute pose of all cameras */
+/*--------------------------- BundleAdjust ---------------------------*/
+/* 
+   Runs the bundle adjustment procedure to compute pose of all cameras.
+   Starts by obtaining the initial pair and using them to get an
+   initial estimate of the sensed geometry.  From there, additional
+   views are incorporated.
+*/
 void BundlerApp::BundleAdjust() 
 {
-    clock_t start = clock();
+clock_t start = clock();
 
-    /* Compute initial image information */
-    ComputeGeometricConstraints();
+/* Compute initial image information */
+ComputeGeometricConstraints();
 
+//TODO: Go dump this code elsewhere since it seems to have been used
+//TODO:  at one point.  Probably will need a dumpme file.
 #if 0
-    ComputeImageGraphLayout();
+ComputeImageGraphLayout();
 
-    CreateImageGraph();
-    CreateWorkingImageGraphLargestComponent();
+CreateImageGraph();
+CreateWorkingImageGraphLargestComponent();
 
-    std::vector<int> interior;
-    ImageGraph graph = ComputeMSTWorkingGraph(interior);
-    // WriteGraphMETIS(graph, "graph.met");
-    PartitionGraph(graph, interior);
+std::vector<int> interior;
+ImageGraph graph = ComputeMSTWorkingGraph(interior);
+// WriteGraphMETIS(graph, "graph.met");
+PartitionGraph(graph, interior);
 
-    OutputImageGraph("graph.partition.dot", false);
+OutputImageGraph("graph.partition.dot", false);
 #endif
 
-    /* For now, assume all images form one connected component */
-    int num_images = GetNumImages();
-    int *added_order = new int[num_images];
-    int *added_order_inv = new int[num_images];
+/* For now, assume all images form one connected component */
+int num_images = GetNumImages();
+int *added_order = new int[num_images];
+int *added_order_inv = new int[num_images];
 
-    /* Set track pointers to -1 */
-    for (int i = 0; i < (int) m_track_data.size(); i++) {
-        m_track_data[i].m_extra = -1;
-    }
+/* Set track pointers to -1 */
+for (int i = 0; i < (int) m_track_data.size(); i++) 
+  m_track_data[i].m_extra = -1;
 
-    /* **** Run bundle adjustment! **** */
+/* **** Run bundle adjustment! **** */
 
-    camera_params_t *cameras = new camera_params_t[num_images];
+camera_params_t *cameras = new camera_params_t[num_images];
 
-    int max_pts = (int) m_track_data.size();
-    v3_t *points = new v3_t[max_pts];
-    v3_t *colors = new v3_t[max_pts];
-    std::vector<ImageKeyVector> pt_views;
+int max_pts = (int) m_track_data.size();
+v3_t *points = new v3_t[max_pts];
+v3_t *colors = new v3_t[max_pts];
+std::vector<ImageKeyVector> pt_views;
 
-    // int good_pair_1 = -1;
-    // int good_pair_2 = -1;
+// int good_pair_1 = -1;
+// int good_pair_2 = -1;
 
-    /* Initialize the bundle adjustment */
-    int num_init_cams = 0;
-    InitializeBundleAdjust(num_init_cams, added_order, added_order_inv,
-        cameras, points, colors, pt_views, 
-        m_use_constraints);
+/* Initialize the bundle adjustment */
+int num_init_cams = 0;
+InitializeBundleAdjust(num_init_cams, added_order, added_order_inv,
+                       cameras, points, colors, pt_views, m_use_constraints);
 
-    int i_best = -1, j_best = -1, max_matches = 0;
-    double max_score = 0.0;
-    int curr_num_cameras, curr_num_pts;
-    int pt_count;
+int i_best = -1, j_best = -1, max_matches = 0;
+double max_score = 0.0;
+int curr_num_cameras, curr_num_pts;
+int pt_count;
 
-    if (num_init_cams == 0) {
-        BundlePickInitialPair(i_best, j_best, true);
+if (num_init_cams == 0) 
+ {
+  BundlePickInitialPair(i_best, j_best, true);
 
-        added_order[0] = i_best;
-        added_order[1] = j_best;
+  added_order[0] = i_best;
+  added_order[1] = j_best;
 
-        // good_pair_1 = 0; // i_best;
-        // good_pair_2 = 1; // j_best;
+  // good_pair_1 = 0; // i_best;
+  // good_pair_2 = 1; // j_best;
 
-        printf("[BundleAdjust] Adjusting cameras "
-            "%d and %d (score = %0.3f)\n", 
-            i_best, j_best, max_score);
+  printf("[BundleAdjust] Adjusting cameras %d and %d (score = %0.3f)\n", 
+                                                   i_best, j_best, max_score);
 
-        /* **** Set up the initial cameras **** */
-        double init_focal_length_0 = 0.0, init_focal_length_1 = 0.0;
-        pt_count = curr_num_pts = 
-            SetupInitialCameraPair(i_best, j_best, 
-            init_focal_length_0, init_focal_length_1,
-            cameras, points, colors, pt_views);
+  /* **** Set up the initial cameras **** */
+  double init_focal_length_0 = 0.0, init_focal_length_1 = 0.0;
+  pt_count = curr_num_pts 
+           = SetupInitialCameraPair(i_best, j_best, init_focal_length_0, 
+                      init_focal_length_1, cameras, points, colors, pt_views);
 
-        DumpOutputFile(m_output_directory, "bundle.init.out",
-            num_images, 2, curr_num_pts,
-            added_order, cameras, points, colors, pt_views);
+  DumpOutputFile(m_output_directory, "bundle.init.out", num_images, 2, 
+            curr_num_pts, added_order, cameras, points, colors, pt_views);
 
-        int cnp = GetNumCameraParameters();
+  int cnp = GetNumCameraParameters();
 
-        /* Run sfm for the first time */
-        double *S = new double[2 * 2 * cnp * cnp];
-        double error0;
-        error0 = RunSFM(curr_num_pts, 2, 0, false,
-            cameras, points, added_order, colors, pt_views, 0.0,
-            S, NULL, NULL, NULL, !m_fix_necker);
+  /* Run sfm for the first time */
+  double *S = new double[2 * 2 * cnp * cnp];
+  double error0;
+  error0 = RunSFM(curr_num_pts, 2, 0, false, cameras, points, added_order, 
+                  colors, pt_views, 0.0, S, NULL, NULL, NULL, !m_fix_necker);
 
-        delete [] S;
+  delete [] S;
 
-        printf("  focal lengths: %0.3f, %0.3f\n", cameras[0].f, cameras[1].f);
+  printf("  focal lengths: %0.3f, %0.3f\n", cameras[0].f, cameras[1].f);
 
-        if (m_fix_necker) {
-            /* Swap the cameras and flip the depths to deal with Necker
-            * reversal */
+  if (m_fix_necker) 
+   {
+    /* Swap the cameras and flip the depths to deal with Necker reversal */
 
-            camera_params_t cameras_old[2];
-            v3_t *points_old;
+    camera_params_t cameras_old[2];
+    v3_t *points_old;
 
-            points_old = new v3_t [curr_num_pts];
+    points_old = new v3_t [curr_num_pts];
 
-            memcpy(points_old, points, sizeof(v3_t) * curr_num_pts);
-            memcpy(cameras_old, cameras, sizeof(camera_params_t) * 2);
+    memcpy(points_old, points, sizeof(v3_t) * curr_num_pts);
+    memcpy(cameras_old, cameras, sizeof(camera_params_t) * 2);
 
-            camera_params_t tmp = cameras[0];
-            memcpy(cameras[0].R, cameras[1].R, sizeof(double) * 9);
-            memcpy(cameras[0].t, cameras[1].t, sizeof(double) * 3);
-            cameras[0].f = init_focal_length_0;
-            cameras[0].k[0] = cameras[0].k[1] = 0.0;
+    camera_params_t tmp = cameras[0];
+    memcpy(cameras[0].R, cameras[1].R, sizeof(double) * 9);
+    memcpy(cameras[0].t, cameras[1].t, sizeof(double) * 3);
+    cameras[0].f = init_focal_length_0;
+    cameras[0].k[0] = cameras[0].k[1] = 0.0;
 
-            memcpy(cameras[1].R, tmp.R, sizeof(double) * 9);
-            memcpy(cameras[1].t, tmp.t, sizeof(double) * 3);
-            cameras[1].f = init_focal_length_1;
-            cameras[1].k[0] = cameras[1].k[1] = 0.0;
+    memcpy(cameras[1].R, tmp.R, sizeof(double) * 9);
+    memcpy(cameras[1].t, tmp.t, sizeof(double) * 3);
+    cameras[1].f = init_focal_length_1;
+    cameras[1].k[0] = cameras[1].k[1] = 0.0;
 
-            double K1inv[9] = 
-            { 1.0 / cameras[0].f, 0.0, 0.0,
-            0.0, 1.0 / cameras[0].f, 0.0,
-            0.0, 0.0, 1.0 };
+    double K1inv[9] = { 1.0 / cameras[0].f, 0.0, 0.0,
+                        0.0, 1.0 / cameras[0].f, 0.0,
+                        0.0, 0.0, 1.0 };
+    double K2inv[9] = { 1.0 / cameras[1].f, 0.0, 0.0,
+                        0.0, 1.0 / cameras[1].f, 0.0,
+                        0.0, 0.0, 1.0 };
 
-            double K2inv[9] = 
-            { 1.0 / cameras[1].f, 0.0, 0.0,
-            0.0, 1.0 / cameras[1].f, 0.0,
-            0.0, 0.0, 1.0 };
+    for (int i = 0; i < curr_num_pts; i++) 
+     {
+      int k1 = pt_views[i][0].second;
+      int k2 = pt_views[i][1].second;
 
-            for (int i = 0; i < curr_num_pts; i++) {
-                int k1 = pt_views[i][0].second;
-                int k2 = pt_views[i][1].second;
+      double proj1[3] = { GetKey(added_order[0],k1).m_x,
+                          GetKey(added_order[0],k1).m_y,
+                          1.0 };
+      double proj2[3] = { GetKey(added_order[1],k2).m_x,
+                          GetKey(added_order[1],k2).m_y,
+                          1.0 };
 
-                double proj1[3] = { GetKey(added_order[0],k1).m_x,
-                    GetKey(added_order[0],k1).m_y,
-                    1.0 };
+      if (m_optimize_for_fisheye)
+       {
+        double x1 = proj1[0];
+        double y1 = proj1[1];
 
-                double proj2[3] = { GetKey(added_order[1],k2).m_x,
-                    GetKey(added_order[1],k2).m_y,
-                    1.0 };
+        double x2 = proj2[0];
+        double y2 = proj2[1];
 
-                if (m_optimize_for_fisheye) {
-                    double x1 = proj1[0];
-                    double y1 = proj1[1];
+        m_image_data[added_order[0]].UndistortPoint(x1, y1, proj1[0], proj1[1]);
+        m_image_data[added_order[1]].UndistortPoint(x2, y2, proj2[0], proj2[1]);
+       }
 
-                    double x2 = proj2[0];
-                    double y2 = proj2[1];
+      double proj1_norm[3], proj2_norm[3];
 
-                    m_image_data[added_order[0]].
-                        UndistortPoint(x1, y1, proj1[0], proj1[1]);
-                    m_image_data[added_order[1]].
-                        UndistortPoint(x2, y2, proj2[0], proj2[1]);
-                }
+      matrix_product(3, 3, 3, 1, K1inv, proj1, proj1_norm);
+      matrix_product(3, 3, 3, 1, K2inv, proj2, proj2_norm);
 
+      v2_t p = v2_new(proj1_norm[0] / proj1_norm[2],
+                      proj1_norm[1] / proj1_norm[2]);
 
-                double proj1_norm[3], proj2_norm[3];
+      v2_t q = v2_new(proj2_norm[0] / proj2_norm[2],
+                      proj2_norm[1] / proj2_norm[2]);
 
-                matrix_product(3, 3, 3, 1, K1inv, proj1, proj1_norm);
-                matrix_product(3, 3, 3, 1, K2inv, proj2, proj2_norm);
+      double proj_error;
+      double t1[3], t2[3];
 
-                v2_t p = v2_new(proj1_norm[0] / proj1_norm[2],
-                    proj1_norm[1] / proj1_norm[2]);
+      /* Put the translation in standard form */
+      matrix_product(3, 3, 3, 1, cameras[0].R, cameras[0].t, t1);
+      matrix_scale(3, 1, t1, -1.0, t1);
+      matrix_product(3, 3, 3, 1, cameras[1].R, cameras[1].t, t2);
+      matrix_scale(3, 1, t2, -1.0, t2);
 
-                v2_t q = v2_new(proj2_norm[0] / proj2_norm[2],
-                    proj2_norm[1] / proj2_norm[2]);
+      points[i] = triangulate(p, q, cameras[0].R, t1, cameras[1].R, t2,
+                                                                 &proj_error);
+     }
 
-                double proj_error;
+    double error1;
+    error1 = RunSFM(curr_num_pts, 2, 0, false, cameras, points, 
+                                               added_order, colors, pt_views);
 
-                double t1[3], t2[3];
-
-                /* Put the translation in standard form */
-                matrix_product(3, 3, 3, 1, cameras[0].R, cameras[0].t, t1);
-                matrix_scale(3, 1, t1, -1.0, t1);
-                matrix_product(3, 3, 3, 1, cameras[1].R, cameras[1].t, t2);
-                matrix_scale(3, 1, t2, -1.0, t2);
-
-                points[i] = triangulate(p, q, 
-                    cameras[0].R, t1, cameras[1].R, t2,
-                    &proj_error);
-            }
-
-            double error1;
-            error1 = RunSFM(curr_num_pts, 2, 0, false,
-                cameras, points, added_order, colors, pt_views);
-
-            printf("  focal lengths: %0.3f, %0.3f\n", 
-                cameras[0].f, cameras[1].f);
+    printf("  focal lengths: %0.3f, %0.3f\n", cameras[0].f, cameras[1].f);
 
 #if 0
-            if (error0 < error1) {
-                /* Swap back */
-                printf("Restoring pre-Necker configuration\n");
+    if (error0 < error1) 
+     {
+      /* Swap back */
+      printf("Restoring pre-Necker configuration\n");
 
-                memcpy(points, points_old, sizeof(v3_t) * curr_num_pts);
-                memcpy(cameras, cameras_old, sizeof(camera_params_t) * 2);
-            }
+      memcpy(points, points_old, sizeof(v3_t) * curr_num_pts);
+      memcpy(cameras, cameras_old, sizeof(camera_params_t) * 2);
+     }
 
-            delete [] points_old;
+    delete [] points_old;
 #endif
-        }
+   }
 
-        DumpPointsToPly(m_output_directory, "points001.ply", 
-            curr_num_pts, 2, points, colors, cameras);
+  DumpPointsToPly(m_output_directory, "points001.ply", curr_num_pts, 2, 
+                                                      points, colors, cameras);
 
-        if (m_bundle_output_base != NULL) {
-            char buf[256];
-            sprintf(buf, "%s%03d.out", m_bundle_output_base, 1);
-            DumpOutputFile(m_output_directory, buf, num_images, 2, curr_num_pts,
-                added_order, cameras, points, colors, pt_views);
+  if (m_bundle_output_base != NULL) 
+   {
+    char buf[256];
+    sprintf(buf, "%s%03d.out", m_bundle_output_base, 1);
+    DumpOutputFile(m_output_directory, buf, num_images, 2, curr_num_pts,
+                   added_order, cameras, points, colors, pt_views);
 
 #if 0
-            if (m_estimate_distortion) {
-                sprintf(buf, "%s%03d.rd.out", m_bundle_output_base, 1);
-                DumpOutputFile(m_output_directory, buf, 
-                    num_images, 2, curr_num_pts,
-                    added_order, cameras, points, colors, pt_views, 
-                    true);
-            }
+    if (m_estimate_distortion) 
+     {
+      sprintf(buf, "%s%03d.rd.out", m_bundle_output_base, 1);
+      DumpOutputFile(m_output_directory, buf, num_images, 2, curr_num_pts,
+                     added_order, cameras, points, colors, pt_views, true);
+     }
 #endif
-        }
+   }
 
-        curr_num_cameras = 2;
-    } else {
+  curr_num_cameras = 2;
+ } 
+else 
+ {
 #if 0
-        if (m_initial_pair[0] == -1 || m_initial_pair[1] == -1) {
-            printf("[BundleAdjust] Error: initial good pair "
-                "not provided!\n");
-            printf("[BundleAdjust] Please specify a pair of "
-                "cameras with medium baseline using\n"
-                "  --init_pair1 <img1> and --init_pair2 <img2>\n");
-            exit(1);
-        }
+  if (m_initial_pair[0] == -1 || m_initial_pair[1] == -1) 
+   {
+    printf("[BundleAdjust] Error: initial good pair not provided!\n");
+    printf("[BundleAdjust] Please specify a pair of cameras with"
+           "medium baseline using\n"
+           "  --init_pair1 <img1> and --init_pair2 <img2>\n");
+    exit(1);
+   }
 
-        good_pair_1 = added_order_inv[m_initial_pair[0]];
-        good_pair_2 = added_order_inv[m_initial_pair[1]];
+  good_pair_1 = added_order_inv[m_initial_pair[0]];
+  good_pair_2 = added_order_inv[m_initial_pair[1]];
 
-        if (good_pair_1 == -1 || good_pair_2 == -1) {
-            printf("[BundleAdjust] Error: initial pair haven't "
-                "been adjusted!\n");
-            printf("[BundleAdjust] Please specify another pair!\n");
-            exit(0);
-        }
+  if (good_pair_1 == -1 || good_pair_2 == -1) 
+   {
+    printf("[BundleAdjust] Error: initial pair haven't been adjusted!\n");
+    printf("[BundleAdjust] Please specify another pair!\n");
+    exit(0);
+   }
 #endif
 
-        curr_num_cameras = num_init_cams;
-        pt_count = curr_num_pts = (int) m_point_data.size();
-    }
+  curr_num_cameras = num_init_cams;
+  pt_count = curr_num_pts = (int) m_point_data.size();
+ }
 
-    for (int round = curr_num_cameras; 
-        round < num_images; 
-        round++, curr_num_cameras++) {
+for (int round = curr_num_cameras; round < num_images; 
+                                   round++, curr_num_cameras++) 
+ {
+  int parent_idx = -1;
+  int next_idx;
 
-            int parent_idx = -1;
-            int next_idx;
+  if (m_construct_max_connectivity)
+    next_idx = FindCameraWithMostConnectivity(round, curr_num_pts, added_order,
+                                                       parent_idx, max_matches);
+  else
+    next_idx = FindCameraWithMostMatches(round, curr_num_pts, added_order, 
+                                             parent_idx, max_matches, pt_views);
 
-            if (m_construct_max_connectivity)
-                next_idx = FindCameraWithMostConnectivity(round, curr_num_pts, 
-                added_order, parent_idx, 
-                max_matches);
-            else
-                next_idx = FindCameraWithMostMatches(round, curr_num_pts, 
-                added_order, parent_idx, 
-                max_matches, pt_views);
+  printf("[BundleAdjust] max_matches = %d\n", max_matches);
 
-            printf("[BundleAdjust] max_matches = %d\n", max_matches);
+  if (max_matches < 16)
+    break; /* No more connections */
 
-            if (max_matches < 16)
-                break; /* No more connections */
+  /* Now, throw the new camera into the mix and redo bundle adjustment */
+  added_order[round] = next_idx;
 
-            /* Now, throw the new camera into the mix and redo bundle
-            * adjustment */
-            added_order[round] = next_idx;
+  printf("[BundleAdjust[%d]] Adjusting camera %d " 
+           "(parent = %d, matches = %d)\n", round, next_idx, 
+            (parent_idx == -1 ? -1 : added_order[parent_idx]), max_matches);
 
-            printf("[BundleAdjust[%d]] Adjusting camera %d "
-                "(parent = %d, matches = %d)\n", 
-                round, next_idx, 
-                (parent_idx == -1 ? -1 : added_order[parent_idx]), max_matches);
-
-
-            /* **** Set up the new camera **** */
+  /* **** Set up the new camera **** */
 #if 0
-            cameras[round] = 
-                BundleInitializeImage(m_image_data[next_idx], 
-                next_idx, round, curr_num_pts,
-                added_order, points, cameras + parent_idx,
-                cameras, pt_views);
+  cameras[round] = BundleInitializeImage(m_image_data[next_idx], 
+                           next_idx, round, curr_num_pts, added_order, 
+                           points, cameras + parent_idx, cameras, pt_views);
 #else
-            BundleInitializeImageFullBundle(next_idx, parent_idx, 
-                round, curr_num_pts,
-                added_order, cameras, points, colors,
-                pt_views);
+  BundleInitializeImageFullBundle(next_idx, parent_idx, round, curr_num_pts,
+                               added_order, cameras, points, colors, pt_views);
 #endif
 
-            /* Compute the distance between the first pair of cameras */
+  /* Compute the distance between the first pair of cameras */
 #if 0
-            double dist0 = GetCameraDistance(cameras + good_pair_1, 
-                cameras + good_pair_2, 
-                m_explicit_camera_centers);
+  double dist0 = GetCameraDistance(cameras + good_pair_1, 
+                                   cameras + good_pair_2, 
+                                   m_explicit_camera_centers);
 #else
-            double dist0 = 0.0;
+  double dist0 = 0.0;
 #endif
 
-            printf("[BundleAdjust] Adding new matches\n");
+  printf("[BundleAdjust] Adding new matches\n");
 
-            if (!m_skip_add_points) {
-                pt_count = 
-                    BundleAdjustAddAllNewPoints(curr_num_pts, curr_num_cameras + 1,
-                    added_order, cameras, 
-                    points, colors,
-                    dist0, pt_views);
-            }
+  if (!m_skip_add_points) 
+   {
+    pt_count = BundleAdjustAddAllNewPoints(curr_num_pts, curr_num_cameras + 1,
+                         added_order, cameras, points, colors, dist0, pt_views);
+   }
 
-            curr_num_pts = pt_count;
-            printf("[BundleAdjust] Number of points = %d\n", pt_count);
-            fflush(stdout);
+  curr_num_pts = pt_count;
+  printf("[BundleAdjust] Number of points = %d\n", pt_count);
+  fflush(stdout);
 
-            /* Run sfm again to update parameters */
-            RunSFM(curr_num_pts, round + 1, 0, false,
-                cameras, points, added_order, colors, pt_views);
+  /* Run sfm again to update parameters */
+  RunSFM(curr_num_pts, round + 1, 0, false, cameras, points, added_order, 
+                                                              colors, pt_views);
 
-            /* Remove bad points and cameras */
-            RemoveBadPointsAndCameras(curr_num_pts, curr_num_cameras + 1, 
-                added_order, cameras, points, colors, 
-                pt_views);
+  /* Remove bad points and cameras */
+  RemoveBadPointsAndCameras(curr_num_pts, curr_num_cameras + 1, added_order, 
+                                             cameras, points, colors, pt_views);
 
-            printf("  focal lengths:\n");
+  printf("  focal lengths:\n");
 
-            for (int i = 0; i <= round; i++) {
-                if(m_image_data[added_order[i]].m_has_init_focal) {
-                    printf("   [%03d] %0.3f (%0.3f) %s %d; %0.3e, %0.3e\n", 
+  for (int i = 0; i <= round; i++) 
+   {
+    if(m_image_data[added_order[i]].m_has_init_focal) 
+     {
+      printf("   [%03d] %0.3f (%0.3f) %s %d; %0.3e, %0.3e\n", 
                         i, cameras[i].f, 
                         m_image_data[added_order[i]].m_init_focal,
                         m_image_data[added_order[i]].m_name,
                         added_order[i], cameras[i].k[0], cameras[i].k[1]); 
-                } else {
-                    printf("   [%03d] %0.3f %s %d; %0.3e %0.3e\n", 
+     } 
+    else 
+     {
+      printf("   [%03d] %0.3f %s %d; %0.3e %0.3e\n", 
                         i, cameras[i].f, m_image_data[added_order[i]].m_name,
                         added_order[i], cameras[i].k[0], cameras[i].k[1]);
-                }
-            }
+     }
+   }
 
-            /* Dump output for this round */
-            char buf[256];
-            sprintf(buf, "points%03d.ply", round);
+  /* Dump output for this round */
+  char buf[256];
+  sprintf(buf, "points%03d.ply", round);
 
-            DumpPointsToPly(m_output_directory, buf, 
-                curr_num_pts, round+1, points, colors, cameras);
+  DumpPointsToPly(m_output_directory, buf, curr_num_pts, round+1, 
+                                                    points, colors, cameras);
 
-            if (m_bundle_output_base != NULL) {
-                sprintf(buf, "%s%03d.out", m_bundle_output_base, round);
-                DumpOutputFile(m_output_directory, buf, num_images, 
-                    curr_num_cameras + 1, curr_num_pts,
-                    added_order, cameras, points, colors, pt_views);
-
-#if 0
-                if (m_estimate_distortion) {
-                    sprintf(buf, "%s%03d.rd.out", m_bundle_output_base, round);
-                    DumpOutputFile(m_output_directory, buf, num_images, 
-                        curr_num_cameras + 1, curr_num_pts,
-                        added_order, cameras, points, colors, pt_views,
-                        true);
-                }
-#endif
-            }
-    }
-
-    clock_t end = clock();
-
-    printf("[BundleAdjust] Bundle adjustment took %0.3fs\n",
-        (end - start) / ((double) CLOCKS_PER_SEC));
-
-    if (m_estimate_ignored) {
-        EstimateIgnoredCameras(curr_num_cameras,
-            cameras, added_order,
-            curr_num_pts, points, colors, pt_views);
-    }
-
-    /* Dump output */
-    if (m_bundle_output_file != NULL) {
-        DumpOutputFile(m_output_directory, m_bundle_output_file, 
-            num_images, curr_num_cameras, curr_num_pts,
-            added_order, cameras, points, colors, pt_views);
+  if (m_bundle_output_base != NULL) 
+   {
+    sprintf(buf, "%s%03d.out", m_bundle_output_base, round);
+    DumpOutputFile(m_output_directory, buf, num_images, curr_num_cameras + 1,
+                  curr_num_pts, added_order, cameras, points, colors, pt_views);
 
 #if 0
-        if (m_estimate_distortion) {
-            char buf[256];
-            sprintf(buf, "%s.rd.out", m_bundle_output_file);
-            DumpOutputFile(m_output_directory, buf, num_images, 
-                curr_num_cameras, curr_num_pts,
-                added_order, cameras, points, colors, pt_views,
-                true);
-        }
+    if (m_estimate_distortion) 
+     {
+      sprintf(buf, "%s%03d.rd.out", m_bundle_output_base, round);
+      DumpOutputFile(m_output_directory, buf, num_images, 
+                       curr_num_cameras + 1, curr_num_pts, added_order, 
+                       cameras, points, colors, pt_views, true);
+     }
 #endif
-    }
+   }
+ }
 
-    /* Save the camera parameters and points */
+clock_t end = clock();
 
-    /* Cameras */
-    for (int i = 0; i < num_images; i++) {
-        m_image_data[i].m_camera.m_adjusted = false;
-    }
+printf("[BundleAdjust] Bundle adjustment took %0.3fs\n",
+                                     (end - start) / ((double) CLOCKS_PER_SEC));
 
-    for (int i = 0; i < curr_num_cameras; i++) {
-        int img = added_order[i];
+if (m_estimate_ignored) 
+ {
+  EstimateIgnoredCameras(curr_num_cameras, cameras, added_order,
+                                      curr_num_pts, points, colors, pt_views);
+ }
 
-        m_image_data[img].m_camera.m_adjusted = true;
-        memcpy(m_image_data[img].m_camera.m_R, cameras[i].R, 
-            9 * sizeof(double));
+/* Dump output */
+if (m_bundle_output_file != NULL) 
+ {
+  DumpOutputFile(m_output_directory, m_bundle_output_file, 
+                 num_images, curr_num_cameras, curr_num_pts,
+                 added_order, cameras, points, colors, pt_views);
 
-        matrix_product(3, 3, 3, 1, 
-            cameras[i].R, cameras[i].t,
-            m_image_data[img].m_camera.m_t);
+#if 0
+  if (m_estimate_distortion) 
+   {
+    char buf[256];
+    sprintf(buf, "%s.rd.out", m_bundle_output_file);
+    DumpOutputFile(m_output_directory, buf, num_images, curr_num_cameras, 
+                   curr_num_pts, added_order, cameras, points, colors, 
+                   pt_views, true);
+   }
+#endif
+ }
 
-        matrix_scale(3, 1, 
-            m_image_data[img].m_camera.m_t, -1.0, 
-            m_image_data[img].m_camera.m_t);	    
+/* Save the camera parameters and points */
 
-        m_image_data[img].m_camera.m_focal = cameras[i].f;
+/* Cameras */
+for (int i = 0; i < num_images; i++) 
+ {
+  m_image_data[i].m_camera.m_adjusted = false;
+ }
 
-        m_image_data[img].m_camera.Finalize();
-    }
+for (int i = 0; i < curr_num_cameras; i++) 
+ {
+  int img = added_order[i];
 
-    /* Points */
-    for (int i = 0; i < curr_num_pts; i++) {
-        /* Check if the point is visible in any view */
-        if ((int) pt_views[i].size() == 0) 
-            continue; /* Invisible */
+  m_image_data[img].m_camera.m_adjusted = true;
+  memcpy(m_image_data[img].m_camera.m_R, cameras[i].R, 9 * sizeof(double));
 
-        PointData pdata;
-        pdata.m_pos[0] = Vx(points[i]);
-        pdata.m_pos[1] = Vy(points[i]);
-        pdata.m_pos[2] = Vz(points[i]);
+  matrix_product(3, 3, 3, 1, cameras[i].R, cameras[i].t, 
+                                           m_image_data[img].m_camera.m_t);
 
-        pdata.m_color[0] = (float) Vx(colors[i]);
-        pdata.m_color[1] = (float) Vy(colors[i]);
-        pdata.m_color[2] = (float) Vz(colors[i]);
+  matrix_scale(3, 1, m_image_data[img].m_camera.m_t, -1.0, 
+                                           m_image_data[img].m_camera.m_t);
+
+  m_image_data[img].m_camera.m_focal = cameras[i].f;
+
+  m_image_data[img].m_camera.Finalize();
+ }
+
+/* Points */
+for (int i = 0; i < curr_num_pts; i++) 
+ {
+  /* Check if the point is visible in any view */
+  if ((int) pt_views[i].size() == 0) 
+    continue; /* Invisible */
+
+  PointData pdata;
+  pdata.m_pos[0] = Vx(points[i]);
+  pdata.m_pos[1] = Vy(points[i]);
+  pdata.m_pos[2] = Vz(points[i]);
+
+  pdata.m_color[0] = (float) Vx(colors[i]);
+  pdata.m_color[1] = (float) Vy(colors[i]);
+  pdata.m_color[2] = (float) Vz(colors[i]);
 
 #if 1
-        for (int j = 0; j < (int) pt_views[i].size(); j++) {
-            int v = pt_views[i][j].first;
-            int vnew = added_order[v];
-            pdata.m_views.push_back(ImageKey(vnew, pt_views[i][j].second));
-        }
+  for (int j = 0; j < (int) pt_views[i].size(); j++) 
+   {
+    int v = pt_views[i][j].first;
+    int vnew = added_order[v];
+    pdata.m_views.push_back(ImageKey(vnew, pt_views[i][j].second));
+   }
 #else
-        pdata.m_views = pt_views[i];
+  pdata.m_views = pt_views[i];
 #endif
-        // pdata.m_views = pt_views[i];
+  // pdata.m_views = pt_views[i];
 
-        m_point_data.push_back(pdata);
-    }
+  m_point_data.push_back(pdata);
+ }
 
-    delete [] added_order;
-    delete [] added_order_inv;
+delete [] added_order;
+delete [] added_order_inv;
 
-    SetMatchesFromPoints();
+SetMatchesFromPoints();
 
 #if 0
-    bool *image_mask = new bool[num_images];
+bool *image_mask = new bool[num_images];
 
-    for (int i = 0; i < num_images; i++) {
-        if (m_image_data[i].m_camera.m_adjusted)
-            image_mask[i] = true;
-        else 
-            image_mask[i] = false;
-    }
+for (int i = 0; i < num_images; i++) 
+ {
+  if (m_image_data[i].m_camera.m_adjusted)
+    image_mask[i] = true;
+  else 
+    image_mask[i] = false;
+ }
 #endif
 }
 

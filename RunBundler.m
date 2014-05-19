@@ -28,6 +28,9 @@
 %
 %  TODO:        For now it is a script.  Might want to make a function.
 %
+%  DEPENDENCIES:
+%       VLFeat          http://www.vlfeat.org/
+%       
 %=============================== RunBundler ==============================
 
 %{
@@ -41,76 +44,72 @@
 # BASE_PATH="TODO"
 %}
 
+%==[0] Options.
+visOutput = false;
+
+
+
 %==[1] Setup the environment.
 BASE_PATH = mfilename('fullpath');
 if (ispc)
-  BASE_PATH = BASE_PATH(1:find(BASE_PATH == '\',1,'last'));
+  BASEPATH = BASEPATH(1:find(BASEPATH == '\',1,'last'));
   BUNDLER = 'Bundler';
 elseif (isunix)
-  BASE_PATH = BASE_PATH(1:find(BASE_PATH == '/',1,'last'));
+  BASEPATH = BASEPATH(1:find(BASEPATH == '/',1,'last'));
   BUNDLER = 'bundler';
 end
 
-KEYMATCH = [BASE_PATH '/KeyMatchFull'];
-BUNDLER  = [BASE_PATH '/' BUNDLER];
+KEYMATCH = [BASEPATH '/KeyMatchFull'];
+BUNDLER  = [BASEPATH '/' BUNDLER];
 
-disp('Need to write the ToSift script');
-%TO_SIFT=$BASE_PATH/bin/ToSift.sh
-disp('Need to write the extract_focal script or ignore it.');
-% EXTRACT_FOCAL=$BASE_PATH/bin/extract_focal.pl
+%disp('Need to write the ToSift script');
+%TO_SIFT=$BASEPATH/bin/ToSift.sh
+%disp('Need to write the extract_focal script or ignore it.');
+% EXTRACT_FOCAL=$BASEPATH/bin/extract_focal.pl
 %TODO: Matlab has exif info reading in it.  Should be able to
 %TODO:  rewrite perl script as Matlab "easily."
 %TODO: Otherwise, just ignore for now.  All focal length does
 %TODO:  is alter scale.
 
-%==[2] Perform some pre-processing.
+%==[2] Perform SIFT detection and description on all loadable images.
+%       Save them to a Matlab file for loading as needed.
+IMAGEPATH = './';
+IMAGETYPE = 'jpg';
 
+parms.improcessor = improcessor_basic('rgb2gray',{});
+ih = impathreader(IMAGEPATH, ['*.' IMAGETYPE], [], parms);
 
-IMAGE_DIR = './';
+while (ih.isNext())
+  I = ih.next();
+  [keyp, desc] = vl_sift(I);
 
-%== Convert to jpeg -- Is this really necessary for Matlab?
+  outfile = [ IMAGEPATH '/keypts' num2str(ih.frame(),'%04d') '.mat'];
+  save(outfile, 'keyp', 'desc');
+end
+
+%==[3] Perform matching of SIFT features across images.
+ih.reset();
+
+%TODO: What do to here?  Start with dumb approach, all pairwise.
 %{
-# Rename ".JPG" to ".jpg"
-for d in `ls -1 $IMAGE_DIR | egrep ".JPG$"`
-do 
-  mv $IMAGE_DIR/$d $IMAGE_DIR/`echo $d | sed 's/\.JPG/\.jpg/'`
-done
+For each image in sequence, try to match against other images in sequence
+(not yet matched against).  Consider the two images to be "connected" if
+more than some percentage of feature points match.  Keep track of
+connectivity and output to Matlab structure the pairwise matches for that
+given frame.  Should there be a separate file for each pairwise match, or
+one file for all given a frame as per Bundler?
+
+For now, save as matches_XXXX_YYY using the same kind of outfile technique
+as above
 %}
 
-%== Write out list of images for passing to sift executable.
-%   Is this really necessary if we can invoke from Matlab?
-%{
-# Create the list of images
-find $IMAGE_DIR -maxdepth 1 | egrep ".jpg$" | sort > list_tmp.txt
-$EXTRACT_FOCAL list_tmp.txt
-cp prepare/list.txt .
-%}
-
-%== Execute SIFT feature point search.
-%{
-# Run the ToSift script to generate a list of SIFT commands
-echo "[- Extracting keypoints -]"
-rm -f sift.txt
-$TO_SIFT $IMAGE_DIR > sift.txt 
-
-# Execute the SIFT commands
-sh sift.txt
-%}
-
-%== Perform matching of SIFT features across images.
-%{
-# Match images (can take a while)
-echo "[- Matching keypoints (this can take a while) -]"
-sed 's/\.jpg$/\.key/' list_tmp.txt > list_keys.txt
-sleep 1
-echo $MATCHKEYS list_keys.txt matches.init.txt
-$MATCHKEYS list_keys.txt matches.init.txt
-%}
-
-%== Execute bundler on the images.
+%==[4] Execute bundler on the images.
 %{
 # Generate the options file for running bundler 
+
+%TODO: Check for bundle sub-dir.  If not exist, make.
 mkdir bundle
+%TODO: Create bundle/options.txt (open for writing with clear)
 rm -f options.txt
 
 echo "--match_table matches.init.txt" >> options.txt
@@ -134,3 +133,8 @@ $BUNDLER list.txt --options_file options.txt > bundle/out
 %}
 
 disp('[- Done -]');
+
+%==[5] Load main output file and visualize, if specified.
+if (visOutput)
+
+end

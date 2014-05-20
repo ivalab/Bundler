@@ -94,13 +94,22 @@ ih.reset();
 %{
 For each image in sequence, try to match against other images in sequence
 (not yet matched against).  Consider the two images to be "connected" if
-more than some percentage of feature points match.  Keep track of
-connectivity and output to Matlab structure the pairwise matches for that
-given frame.  Should there be a separate file for each pairwise match, or
-one file for all given a frame as per Bundler?
+more than some percentage of feature points match (read Snavely thesis
+to see if other tricks were used, or read the Bundler journal paper; should
+be quick since you just want implementation details).  
+
+Keep track of connectivity and output to Matlab structure the pairwise
+matches for that given frame.  Should there be a separate file for each
+pairwise match, or one file for all given a frame as per Bundler?
 
 For now, save as matches_XXXX_YYY using the same kind of outfile technique
-as above
+as above.  So, one file for each pair of images that match up.
+
+Save the matching keypoint indices from the two frames in a variable
+called inds (2xN variable, with first column being index to first image
+keypoint list and second column being index to second image keypoint list).  
+Save the matching keypoint image locations in a variable called pts (2x2xN)
+variable.  You might or might not need the cat command.
 %}
 
 %==[4] Execute bundler on the images.

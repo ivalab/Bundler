@@ -19,6 +19,10 @@ the file, on the original RunBundler.sh bash script, and on the
 original paper by Snavely et al. (or his thesis which can be found
 in the Literature directory of the SLAM repository).
 
+You should copy most of the code from parts [2] and [3] and before
+here,except for anything that looks to be extensively commented out.
+The minimal needed for you and I to run on our rspective machines.
+
 By the way, you should copy Bundler to the SLAM directory, as in
 
   blahblah/blah/SLAM/Bundler

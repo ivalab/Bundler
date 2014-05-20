@@ -34,606 +34,587 @@
 #include "qsort.h"
 #include "util.h"
 
-
-
 #define MIN_MATCHES 10
 
-/* Load keys from a file */
+/*----------------------------- LoadKeys -----------------------------*/
+/* 
+   Load keys for all images from the key files.
+*/
 void BaseApp::LoadKeys(bool descriptor)
 {
-    printf("[SifterApp::LoadKeys] Loading keys...\n");
+#ifdef _DEBUG_
+printf("[BaseApp::LoadKeys] Loading keys...\n");
+#endif
 
-    clock_t start = clock();
+clock_t start = clock();
+int num_images = GetNumImages();
 
-    int num_images = GetNumImages();
+for (int i = 0; i < num_images; i++) 
+ {
+  #ifdef _DEBUG_
+  printf("[BaseApp::LoadKeys] Loading keys from image %d...\n", i);
+  fflush(stdout);
+  #endif
+  m_image_data[i].LoadKeys(descriptor);
+ }
 
-    for (int i = 0; i < num_images; i++) {
-        printf("[SifterApp::LoadKeys] Loading keys from image %d...\n", i);
-        fflush(stdout);
-	m_image_data[i].LoadKeys(descriptor);
-    }
-
-    clock_t end = clock();
-    
-    printf("[SifterApp::LoadKeys] Loaded keys in %0.3fs\n", 
-	   (end - start) / (double) CLOCKS_PER_SEC);
+clock_t end = clock();
+#ifdef _DEBUG_
+printf("[BaseApp::LoadKeys] Loaded keys in %0.3fs\n", 
+	                            (end - start) / (double) CLOCKS_PER_SEC);
+#endif
 }
 
+/*--------------------------- ReadMatchFile --------------------------*/
+/*
+   Read from file containing key point matches.  The matches are
+   added to the list of matches/MatchTable.  The filename is
+   determined by the two images whose matches should be loaded.
+   If the file doesn't exist, then no matched were found between
+   the two images.
+
+   The file is presumed to be called match-XXX-YYY.txt and
+   should be found in the match directory.
+*/
 void BaseApp::ReadMatchFile(int i, int j)
 {
-    /* Read matches from a file */
-    char buf[256];
-    sprintf(buf, "%s/match-%03d-%03d.txt", m_match_directory, i, j);
+char buf[256];
+sprintf(buf, "%s/match-%03d-%03d.txt", m_match_directory, i, j);
     
-    if (FileExists(buf)) {
-        FILE *f = fopen(buf, "r");
+if (FileExists(buf)) 
+ {
+  FILE *f = fopen(buf, "r");
 	
-        /* Read the number of matches */
-        int num_matches;
-        fscanf(f, "%d", &num_matches);
+  // Read the number of matches.
+  int num_matches;
+  fscanf(f, "%d", &num_matches);
 		
-        if (num_matches < MIN_MATCHES) {
-            // RemoveMatch(i, j);
-            // RemoveMatch(j, i);
-            fclose(f);
-            return;
-        }
+  // If less than minimum allowed, don't bother, move on.
+  if (num_matches < MIN_MATCHES) 
+   {
+    fclose(f);
+    return;
+   }
 
-        SetMatch(i, j);
-        // SetMatch(j, i);
+  SetMatch(i, j);
 
-        std::vector<KeypointMatch> matches;
+  std::vector<KeypointMatch> matches;
 		
-        for (int k = 0; k < num_matches; k++) {
-            int idx1, idx2;
-            fscanf(f, "%d %d", &idx1, &idx2);
+  for (int k = 0; k < num_matches; k++) 
+   {
+    int idx1, idx2;
+    fscanf(f, "%d %d", &idx1, &idx2);
 		   
-#ifdef KEY_LIMIT
-            if (idx1 > KEY_LIMIT || idx2 > KEY_LIMIT)
-                continue;
-#endif /* KEY_LIMIT */
+    #ifdef KEY_LIMIT
+    if (idx1 > KEY_LIMIT || idx2 > KEY_LIMIT)
+      continue;
+    #endif /* KEY_LIMIT */
  
-            KeypointMatch m;
-
-            m.m_idx1 = idx1;
-            m.m_idx2 = idx2;
-		    
-            matches.push_back(m);
-        }
+    KeypointMatch m;
+    m.m_idx1 = idx1;
+    m.m_idx2 = idx2;
+    matches.push_back(m);
+   }
         
-        MatchIndex idx = GetMatchIndex(i, j);
-        // m_match_lists[idx] = matches;
-        m_matches.GetMatchList(idx) = matches;
+  MatchIndex idx = GetMatchIndex(i, j);
+  m_matches.GetMatchList(idx) = matches;
     
-        fclose(f);
-    } else {
-        // RemoveMatch(i, j);
-        // RemoveMatch(j, i);
-    }
+  fclose(f);
+ } 
 }
 
-void BaseApp::LoadMatchTable(const char *filename) {
-    if (m_matches_loaded)
-        return;  /* we already loaded the matches */
+/*-------------------------- LoadMatchTable --------------------------*/
+/*
+   Load the match table from file.  This table contains the set of
+   pairwise matches across two images.  The matches are specified
+   by the key point indices.  The table location/slot specifies which
+   pair of images are being queried.
 
-    printf("[LoadMatchTable] Loading matches\n");
+   The filename is passed as an argument.  If it doesn't exist, then
+   the program will quit.
+*/
+void BaseApp::LoadMatchTable(const char *filename) 
+{
+if (m_matches_loaded)   // Are matches already loaded? 
+  return;  
 
-    /* Set all matches to false */
-    // ClearMatches();
-    RemoveAllMatches();
+#ifdef _DEBUG_
+printf("[LoadMatchTable] Loading matches\n");
+#endif
 
-    FILE *f = fopen(filename, "r");
+// Clear all matches / empty the table. 
+RemoveAllMatches();
 
-    if (f == NULL) {
-        printf("[LoadMatchTable] Error opening file %s for reading\n",
-               filename);
-        exit(1);
-    }
+// Open the file, make sure OK.  If not able to open, exit program.
+FILE *f = fopen(filename, "r");
+if (f == NULL) 
+ {
+  printf("[LoadMatchTable] Error opening file %s for reading\n", filename);
+  exit(1);
+ }
 
-    char buf[256];
-    while (fgets(buf, 256, f)) {
-        /* Read the images */
-        int i1, i2;
-        sscanf(buf, "%d %d\n", &i1, &i2);
+// Read the matching keypoint indices.
+char buf[256];
+while (fgets(buf, 256, f)) 
+ {
+  // Read images indices describing which pairwise matching being loaded. 
+  int i1, i2;
+  sscanf(buf, "%d %d\n", &i1, &i2);
 
-        SetMatch(i1, i2);
-        // SetMatch(i2, i1);
-        // m_matches[i1 * num_images + i2] = true;
-        // m_matches[i2 * num_images + i1] = true;
+  SetMatch(i1, i2);
+  // SetMatch(i2, i1);
 
-        /* Read the number of matches */
-        int nMatches;
-        fscanf(f, "%d\n", &nMatches);
+  // Read the number of matches
+  int nMatches;
+  fscanf(f, "%d\n", &nMatches);
 
-        /* Read the matches */
-        std::vector<KeypointMatch> matches;
-        for (int i = 0; i < nMatches; i++) {
-            int k1, k2;
-            fscanf(f, "%d %d\n", &k1, &k2);
+  // Read the matching indices and populate match table. 
+  std::vector<KeypointMatch> matches;
+  for (int i = 0; i < nMatches; i++) 
+   {
+    int k1, k2;
+    fscanf(f, "%d %d\n", &k1, &k2);
 
-#ifdef KEY_LIMIT
-            if (k1 > KEY_LIMIT || k2 > KEY_LIMIT)
-                continue;
-#endif /* KEY_LIMIT */
+    #ifdef KEY_LIMIT
+    if (k1 > KEY_LIMIT || k2 > KEY_LIMIT)
+      continue;
+    #endif /* KEY_LIMIT */
 
-            KeypointMatch m;
+    KeypointMatch m;
+    m.m_idx1 = k1;
+    m.m_idx2 = k2;
+    matches.push_back(m);
+   }
 
-            m.m_idx1 = k1;
-            m.m_idx2 = k2;
-		    
-            matches.push_back(m);
-        }
-
-        MatchIndex idx = GetMatchIndex(i1, i2);
-        // m_match_lists[idx] = matches;
-        m_matches.GetMatchList(idx) = matches;
-    }
+  MatchIndex idx = GetMatchIndex(i1, i2);
+  m_matches.GetMatchList(idx) = matches;
+ }
     
-    fclose(f);
+fclose(f);  // Done loading table, close shop.
 }    
 
+/*------------------------- LoadMatchIndexes -------------------------*/
+/*
+   Load the keypoint indices for the matched points.  For each image,
+   there is a specific file with this information.  Loop through all
+   images and load the data from the corresponding file.  Populate
+   the match table.
+
+TODO:  Correct to that it is LoadMatchIndices.
+*/
 void BaseApp::LoadMatchIndexes(const char *index_dir)
 {
-    int num_images = GetNumImages();
+int num_images = GetNumImages();
     
-    for (int i = 0; i < num_images; i++) {
-        char buf[256];
-        sprintf(buf, "%s/match-%03d.txt", index_dir, i);
+for (int i = 0; i < num_images; i++) // For each image, try to load file ...
+ {
+  char buf[256];
+  sprintf(buf, "%s/match-%03d.txt", index_dir, i);
 
-        FILE *f = fopen(buf, "r");
+  FILE *f = fopen(buf, "r");
         
-        if (f == NULL)
-            continue;
+  if (f == NULL)
+    continue;
         
-        printf("[LoadMatchIndexes] Loading matches for image %d... ", i);
+  #ifdef _DEBUG_
+  printf("[LoadMatchIndexes] Loading matches for image %d... ", i);
+  #endif 
 
-        int num_matched_images = 0;
-        int index;
-        while(fgets(buf, 256, f) != NULL) {
-            sscanf(buf, "%d\n", &index);
+  int num_matched_images = 0;
+  int index;
+  while(fgets(buf, 256, f) != NULL) // If file has data, then process it ...
+   {
+    sscanf(buf, "%d\n", &index);
 
-            int num_matches;
-            fscanf(f, "%d\n", &num_matches);
+    int num_matches;
+    fscanf(f, "%d\n", &num_matches);
             
-            std::vector<KeypointMatch> matches;
+    std::vector<KeypointMatch> matches;
 		
-            for (int k = 0; k < num_matches-1; k++) {//-1 is a temp hack
-                int idx1, idx2;
-                fscanf(f, "%d %d\n", &idx1, &idx2);
+    for (int k = 0; k < (num_matches-1); k++)     //-1 is a temp hack
+     {
+      int idx1, idx2;
+      fscanf(f, "%d %d\n", &idx1, &idx2);
 
-#ifdef KEY_LIMIT
-                if (idx1 > KEY_LIMIT || idx2 > KEY_LIMIT)
-                    continue;
-#endif /* KEY_LIMIT */
+      #ifdef KEY_LIMIT
+      if (idx1 > KEY_LIMIT || idx2 > KEY_LIMIT)
+        continue;
+      #endif /* KEY_LIMIT */
 
-                KeypointMatch m;
+      KeypointMatch m;
+      m.m_idx1 = idx1;
+      m.m_idx2 = idx2;
+      matches.push_back(m);
+     }
 
-                m.m_idx1 = idx1;
-                m.m_idx2 = idx2;
-                
-                matches.push_back(m);
-            }
+    if (num_matches < MIN_MATCHES || index >= num_images)   // Bum matches.
+     {
+      matches.clear();              // Clear out whatever was loaded.
+      if (index >= num_images)      // Kick out a warning message.
+        printf("[LoadMatchIndexes] image index %d > num_images\n", index);
+     } 
+    else                                                    // Good matches.
+     { 
+      SetMatch(i, index);                                   // Add to table.
+      MatchIndex idx = GetMatchIndex(i, index);
+      m_matches.GetMatchList(idx) = matches;
 
-            if (num_matches < MIN_MATCHES || index >= num_images) {
-                if (index >= num_images) 
-                    printf("[LoadMatchIndexes] image index %d > num_images\n",
-                           index);
+      num_matched_images++;                                 // Keep count.
+     }
+   }
 
-                // RemoveMatch(i, index);
-                matches.clear();
-            } else { 
-                SetMatch(i, index);
-                MatchIndex idx = GetMatchIndex(i, index);
-                // m_match_lists[idx] = matches;
-                m_matches.GetMatchList(idx) = matches;
+  #ifdef _DEBUG_
+  printf("%d match files loaded.\n", num_matched_images);
+  fflush(stdout);
+  #endif
 
-                num_matched_images++;
-            }
-        }
-
-        printf("%d match files loaded.\n", num_matched_images);
-        fflush(stdout);
-
-        fclose(f);
-    }
+  fclose(f);
+ }
 }
 
-/* Load matches from files */
-void BaseApp::LoadMatches() {
-    if (m_matches_loaded)
-	return;  /* we already loaded the matches */
-
-    if (m_match_table != NULL) {
-        LoadMatchTable(m_match_table);
-    } else if (m_match_index_dir != NULL) {
-        LoadMatchIndexes(m_match_index_dir);
-    } else {
-        printf("[LoadMatches] Loading matches\n");
-
-        int num_images = GetNumImages();
-
-        FILE *f = fopen("match-index.txt", "r");
-        if (f == NULL) {
-            /* Try all pairs */
-            for (int i = 0; i < num_images; i++) {
-                for (int j = i+1; j < num_images; j++) {
-                    ReadMatchFile(i, j);
-                }
-            }
-        } else {
-            printf("[LoadMatches] Reading matches from 'match-index.txt'\n");
-            fflush(stdout);
-
-            /* Set all matches to false */
-            // ClearMatches();
-            RemoveAllMatches();
-
-            char buf[256];
-            unsigned int count = 0;
-            while (fgets(buf, 256, f)) {
-                int i1, i2;
-                sscanf(buf, "%d %d\n", &i1, &i2);
-                ReadMatchFile(i1, i2);
-                count++;
-            }
-
-            printf("[LoadMatches] Read %d match files\n", count);
-            fflush(stdout);
-
-            fclose(f);
-        }
-    }
-
-    // WriteMatchTableDrew(".init");
-
-    PruneDoubleMatches();
-
-    m_matches_loaded = true;
-}
-
-void BaseApp::RemoveAllMatches() 
+/*---------------------------- LoadMatches ---------------------------*/
+/* 
+   Load matches from files.  Looks to see if there is a file that
+   specifies which images should be matchedd.  There are different
+   options: a match table file, a match file directory, and a
+   default matches text file plus associated key point match files.
+*/
+void BaseApp::LoadMatches() 
 {
-    m_matches.RemoveAll();
-}
+if (m_matches_loaded)               // Are matches already loaded?
+  return;  
 
-/* Load a list of image names from a file */
-void BaseApp::LoadImageNamesFromFile(FILE *f)
-{
-    // m_image_names.clear();
-    m_image_data.clear();
+if (m_match_table != NULL)          // Is there a filename specified?
+ {
+  LoadMatchTable(m_match_table);
+ }
+else if (m_match_index_dir != NULL) // Or maybe a directory? 
+ {
+  LoadMatchIndexes(m_match_index_dir);
+ } 
+else                                // Otherwise, go to default file(s).
+ {
+  #ifdef _DEBUG_
+  printf("[LoadMatches] Loading matches\n");
+  #endif
 
-    char buf[256];
-    int idx = 0;
+  int num_images = GetNumImages();
 
-    while (fgets(buf, 256, f)) {
-	ImageData data;
-	data.InitFromString(buf, m_image_directory, m_fisheye);
+  FILE *f = fopen("match-index.txt", "r");  // Try this file.
+  if (f == NULL)                            // If not, try individual files.
+   {
+    /* Try all pairs */
+    for (int i = 0; i < num_images; i++) 
+      for (int j = i+1; j < num_images; j++) 
+        ReadMatchFile(i, j);
+   } 
+  else                                      // If so, the read it.
+   {
+    #ifdef _DEBUG_
+    printf("[LoadMatches] Reading matches from 'match-index.txt'\n");
+    fflush(stdout);
+    #endif
 
-        /* Try to find a keypoint file */
-
-        if (strcmp(m_key_directory, ".") != 0) {
-            char key_buf[256];
-            data.GetBaseName(key_buf);
-
-            char key_path[512];
-            sprintf(key_path, "%s/%s.key", m_key_directory, key_buf);
-            data.m_key_name = strdup(key_path);
-        } else {
-            /* FIXME: I think this causes a memory leak */
-            char key_buf[256];
-            strcpy(key_buf, data.m_name);
-            int len = strlen(key_buf);
-            key_buf[len - 3] = 'k';
-            key_buf[len - 2] = 'e';
-            key_buf[len - 1] = 'y';
-
-            // char key_path[512];
-            // sprintf(key_path, "%s/%s", m_key_directory, key_buf);
-            data.m_key_name = strdup(key_buf);
-        }
-
-        // printf("Keyname: %s\n", data.m_key_name);
-
-#if 0
-	if (log != NULL) {
-	    log->AppendText("  ");
-	    log->AppendText(buf);
-	    log->AppendText("\n");
-	}
-#endif
-
-#if 0
-	/* Eat the newline */
-	if (buf[strlen(buf)-1] == '\n')
-	    buf[strlen(buf)-1] = 0;
-
-	if (buf[strlen(buf)-1] == '\r')
-	    buf[strlen(buf)-1] = 0;
-
-	/* Split the buffer into tokens */
-        std::string str(buf);
-	std::vector<std::string> toks;
-        Tokenize(str, toks, " ");
-
-#if 0
-	wxStringTokenizer t(str, wxT(" "));
-
-	while (t.HasMoreTokens()) {
-	    wxString tok = t.GetNextToken();
-	    toks.push_back(tok);
-	}
-#endif
-
-#if 0
-	if (log != NULL) {
-	    log->AppendText("  ");
-	    log->AppendText(buf);
-	    log->AppendText("\n");
-	}
-#endif
-
-
-	int num_toks = (int) toks.size();
-
-	bool fisheye = m_fisheye; // false;
-	if (num_toks >= 2) {
-	    fisheye = (atoi(toks[1].c_str()) == 1);
-	}
-
-	bool has_init_focal = false;
-	double init_focal = 0.0;
-	if (num_toks >= 3) {
-	    has_init_focal = true;
-	    init_focal = atof(toks[2].c_str());
-	}
-
-	ImageData data;
-
-	// m_imgs.push_back(img);
-	// printf("Adding image %s\n", toks[0].c_str());
-        char buf[512];
-        sprintf(buf, "%s/%s", m_image_directory, toks[0].c_str());
-
-	data.m_name = strdup(buf);
-	data.m_img = NULL;
-	data.m_thumb = NULL;
-	data.m_thumb8 = NULL;
-	data.m_wximage = NULL;
-	data.m_image_loaded = false;
-	data.m_keys_loaded = false;
-
-	data.m_fisheye = fisheye;
-	data.m_has_init_focal = has_init_focal;
-	data.m_init_focal = init_focal;
-	data.m_camera.m_adjusted = false;
-	data.m_texture_index = -1;
-#endif
-
-	m_image_data.push_back(data);
-
-	idx++;
-
-	// wxSafeYield();
-    }
-
-    // Create the match table
-    m_matches = MatchTable(GetNumImages());
-
-    // ClearMatches();
+    /* Clear all matches/match table. */
     RemoveAllMatches();
 
-    m_matches_computed = true;
-    m_num_original_images = GetNumImages();
+    char buf[256];
+    unsigned int count = 0;
+    while (fgets(buf, 256, f)) 
+     {
+      int i1, i2;
+      sscanf(buf, "%d %d\n", &i1, &i2);     // Read image pair (to load).
+      ReadMatchFile(i1, i2);                // Load match info from file.
+      count++;
+     }
 
-    if (m_use_intrinsics)
-        ReadIntrinsicsFile();
-}
-
-/* Read in information about the world */
-void BaseApp::ReadBundleFile(char *filename)
-{
-    printf("[SifterApp::ReadBundleFile] Reading file...\n");
-
-    FILE *f = fopen(filename, "r");
-    if (f == NULL) {
-        printf("Error opening file %s for reading\n", filename);
-        return;
-    }
-
-    int num_images, num_points;
-
-    char first_line[256];
-    fgets(first_line, 256, f);
-    if (first_line[0] == '#') {
-        double version;
-        sscanf(first_line, "# Bundle file v%lf", &version);
-
-        m_bundle_version = version;
-        printf("[ReadBundleFile] Bundle version: %0.3f\n", version);
-
-        fscanf(f, "%d %d\n", &num_images, &num_points);
-    } else if (first_line[0] == 'v') {
-        double version;
-        sscanf(first_line, "v%lf", &version);
-        m_bundle_version = version;
-        printf("[ReadBundleFile] Bundle version: %0.3f\n", version);
-
-        fscanf(f, "%d %d\n", &num_images, &num_points);
-    } else {
-        m_bundle_version = 0.1;
-        sscanf(first_line, "%d %d\n", &num_images, &num_points);
-    }
-
-    printf("[SifterApp::ReadBundleFile] Reading %d images and %d points...\n",
-        num_images, num_points);
-
-    if (num_images != GetNumImages()) {
-        printf("Error: number of images doesn't match file!\n");
-        return;
-    }
-
-    /* Read cameras */
-    for (int i = 0; i < num_images; i++) {
-        double focal_length;
-        double R[9];
-        double t[3];
-        double k[2] = { 0.0, 0.0 };
-
-        if (m_bundle_version >= 0.4) {
-            char name[512];
-            int w, h;
-            fscanf(f, "%s %d %d\n", name, &w, &h);
-        }
-        
-        /* Focal length */
-        if (m_bundle_version > 0.1) {
-            fscanf(f, "%lf %lf %lf\n", &focal_length, k+0, k+1);
-        } else {
-            fscanf(f, "%lf\n", &focal_length);
-        }
-
-        /* Rotation */
-        fscanf(f, "%lf %lf %lf\n%lf %lf %lf\n%lf %lf %lf\n", 
-            R+0, R+1, R+2, R+3, R+4, R+5, R+6, R+7, R+8);
-        /* Translation */
-        fscanf(f, "%lf %lf %lf\n", t+0, t+1, t+2);
-
-#if 0
-        if (m_bundle_version < 0.3) {
-            R[2] = -R[2];
-            R[5] = -R[5];
-            R[6] = -R[6];
-            R[7] = -R[7];
-            t[2] = -t[2];
-        }
-#endif
-
-        if (focal_length <= 100.0 || m_image_data[i].m_ignore_in_bundle) {
-            /* No (or bad) information about this camera */
-            m_image_data[i].m_camera.m_adjusted = false;
-        } else {
-            CameraInfo cd;
-
-            cd.m_adjusted = true;
-            cd.m_width = m_image_data[i].GetWidth();
-            cd.m_height = m_image_data[i].GetHeight();
-            cd.m_focal = focal_length;
-            cd.m_k[0] = k[0];
-            cd.m_k[1] = k[1];
-            memcpy(cd.m_R, R, sizeof(double) * 9);
-            memcpy(cd.m_t, t, sizeof(double) * 3);
-
-            cd.Finalize();
-
-            m_image_data[i].m_camera = cd;
-        }
-    }
-
-    /* Read points */
-    m_point_data.clear();
-    m_point_data.resize(num_points);
-
-    int num_min_views_points = 0;
-    for (int i = 0; i < num_points; i++) {
-        PointData &pt = m_point_data[i];
-
-        /* Position */
-        fscanf(f, "%lf %lf %lf\n", 
-            pt.m_pos + 0, pt.m_pos + 1, pt.m_pos + 2);
-
-        // if (m_bundle_version < 0.3)
-        //     pt.m_pos[2] = -pt.m_pos[2];
-
-        /* Color */
-        fscanf(f, "%f %f %f\n", 
-            pt.m_color + 0, pt.m_color + 1, pt.m_color + 2);
-
-        int num_visible;
-        fscanf(f, "%d", &num_visible);
-		pt.m_num_vis=num_visible;
-        if (num_visible >=3)
-            num_min_views_points++;
-
-        // pt.m_views.resize(num_visible);
-        for (int j = 0; j < num_visible; j++) {
-            int view, key;
-            fscanf(f, "%d %d", &view, &key);
-
-            if (!m_image_data[view].m_camera.m_adjusted) {
-                // printf("[SifterApp::ReadBundleFile] "
-                //        "Removing view %d from point %d\n", view, i);
-            } else {
-                /* Check cheirality */
-                bool val = (m_bundle_version >= 0.3);
-
-                double proj_test[2];
-                if (m_image_data[view].m_camera.
-                    Project(pt.m_pos, proj_test) == val) {
-                    
-                    pt.m_views.push_back(ImageKey(view, key));
-                } else {
-                    printf("[SifterApp::ReadBundleFile] "
-                           "Removing view %d from point %d [cheirality]\n", 
-                               view, i);
-                    // pt.m_views.push_back(ImageKey(view, key));
-                }   
-            }
-            // pt.m_views.push_back(ImageKey(view, key));
-            
-            if (m_bundle_version >= 0.3) {
-                double x, y;
-                fscanf(f, "%lf %lf", &x, &y);
-            }
-        }
-
-        // #define CROP_POINT_CLOUD
-#ifdef CROP_POINT_CLOUD
-        const double x_min = 1.327;
-        const double x_max = 3.556;
-        const double y_min = -1.414;
-        const double y_max = 1.074;
-        const double z_min = -5.502;
-        const double z_max = -3.288;
-        
-        if (pt.m_pos[0] < x_min || pt.m_pos[0] > x_max ||
-            pt.m_pos[1] < y_min || pt.m_pos[1] > y_max ||
-            pt.m_pos[2] < z_min || pt.m_pos[2] > z_max) {
-         
-            pt.m_views.clear();
-        }
-#endif /* CROP_POINT_CLOUD */
-    }
-
-#if 0    
-    /* Read outliers */
-    int num_outliers;
-    fscanf(f, "%d", &num_outliers);
-
-    for (int i = 0; i < num_outliers; i++) {
-        ImageKey ik;
-        fscanf(f, "%d %d", &(ik.first), &(ik.second));
-        m_outliers.push_back(ik);
-    }
-#endif
+    #ifdef _DEBUG_
+    printf("[LoadMatches] Read %d match files\n", count);
+    fflush(stdout);
+    #endif _DEBUG_
 
     fclose(f);
+   }
+ }
 
-    printf("[SifterApp::ReadBundleFile] %d / %d points visible to more than 2 cameras!\n", 
-        num_min_views_points, num_points);
+PruneDoubleMatches();
+m_matches_loaded = true;
 }
 
+/*------------------------- RemoveAllMatches -------------------------*/
+/*
+   Clear out any matches currently stored.
+*/
+void BaseApp::RemoveAllMatches() 
+{
+m_matches.RemoveAll();
+}
+
+/*---------------------- LoadImageNamesFromFile ----------------------*/
+/*
+   Load a list of image names from a file.  Appears to also populate
+   some of the meta-info about where to get key files from/dump them 
+   to.
+*/
+void BaseApp::LoadImageNamesFromFile(FILE *f)
+{
+// m_image_names.clear();
+m_image_data.clear();
+
+char buf[256];
+int idx = 0;
+
+while (fgets(buf, 256, f)) 
+ {
+  ImageData data;
+  data.InitFromString(buf, m_image_directory, m_fisheye);
+
+  // Try to find a keypoint file in key directory, or in current directory.
+  if (strcmp(m_key_directory, ".") != 0) 
+   {
+    char key_buf[256];
+    data.GetBaseName(key_buf);
+
+    char key_path[512];
+    sprintf(key_path, "%s/%s.key", m_key_directory, key_buf);
+    data.m_key_name = strdup(key_path);
+   } 
+  else 
+   {
+    // FIXME: I think this causes a memory leak 
+    // TODO:  Assumes that filename related to data.m_name.
+    char key_buf[256];
+    strcpy(key_buf, data.m_name);
+    int len = strlen(key_buf);
+    key_buf[len - 3] = 'k';
+    key_buf[len - 2] = 'e';
+    key_buf[len - 1] = 'y';
+    data.m_key_name = strdup(key_buf);
+   }
+
+  m_image_data.push_back(data);
+  idx++;
+ }
+
+// Create an empty match table
+m_matches = MatchTable(GetNumImages());
+RemoveAllMatches();
+
+m_matches_computed = true;
+m_num_original_images = GetNumImages();
+
+if (m_use_intrinsics)
+  ReadIntrinsicsFile();
+}
+
+/*-------------------------- ReadBundleFile --------------------------*/
+/* 
+   Read in information about the "world" from the specified file.
+*/
+void BaseApp::ReadBundleFile(char *filename)
+{
+#ifdef _DEBUG_
+printf("[BaseApp::ReadBundleFile] Reading file...\n");
+#endif 
+
+
+//--[1] See if file will open ...
+FILE *f = fopen(filename, "r");
+if (f == NULL) 
+ {
+  printf("Error opening file %s for reading\n", filename);
+  return;
+ }
+
+//--[2] If so, then process the header.  Get #images and #points.
+int num_images, num_points;
+char first_line[256];
+fgets(first_line, 256, f);
+if (first_line[0] == '#') 
+ {
+  double version;
+  sscanf(first_line, "# Bundle file v%lf", &version);
+  m_bundle_version = version;
+  fscanf(f, "%d %d\n", &num_images, &num_points);
+
+  #ifdef _DEBUG_
+  printf("[ReadBundleFile] Bundle version: %0.3f\n", version);
+  #endif
+ } 
+else if (first_line[0] == 'v') 
+ {
+  double version;
+  sscanf(first_line, "v%lf", &version);
+  m_bundle_version = version;
+  fscanf(f, "%d %d\n", &num_images, &num_points);
+
+  #ifdef _DEBUG_
+  printf("[ReadBundleFile] Bundle version: %0.3f\n", version);
+  #endif
+ } 
+else 
+ {
+  m_bundle_version = 0.1;
+  sscanf(first_line, "%d %d\n", &num_images, &num_points);
+ }
+
+#ifdef _DEBUG_
+printf("[BaseApp::ReadBundleFile] Reading %d images and %d points...\n",
+        num_images, num_points);
+#endif
+
+if (num_images != GetNumImages())   // Compare to known info (sanity check).
+ {
+  printf("Error: number of images doesn't match file!\n");
+  return;
+ }
+
+//--[3] Read in camera information. (One camera per image, yeah?)
+//      Camera has focal length, two nonlinear parms, and extrinsic parms.
+for (int i = 0; i < num_images; i++) 
+ {
+  double focal_length;
+  double R[9];
+  double t[3];
+  double k[2] = { 0.0, 0.0 };
+
+  if (m_bundle_version >= 0.4) 
+   {
+    char name[512];
+    int w, h;
+    fscanf(f, "%s %d %d\n", name, &w, &h);
+   }
+        
+  //--[3.1] Focal length 
+  if (m_bundle_version > 0.1) 
+    fscanf(f, "%lf %lf %lf\n", &focal_length, k+0, k+1);
+  else 
+    fscanf(f, "%lf\n", &focal_length);
+
+  //--[3.2] Rotation 
+  fscanf(f, "%lf %lf %lf\n%lf %lf %lf\n%lf %lf %lf\n", 
+                             R+0, R+1, R+2, R+3, R+4, R+5, R+6, R+7, R+8);
+  //--[3.3] Translation 
+  fscanf(f, "%lf %lf %lf\n", t+0, t+1, t+2);
+
+  //--[3.4] If data is "sane" then aggregate data into camera info object.
+  if (focal_length <= 100.0 || m_image_data[i].m_ignore_in_bundle) 
+   {
+    /* No (or bad) information about this camera */
+    m_image_data[i].m_camera.m_adjusted = false;
+   } 
+  else 
+   {
+    CameraInfo cd;
+
+    cd.m_adjusted = true;
+    cd.m_width = m_image_data[i].GetWidth();
+    cd.m_height = m_image_data[i].GetHeight();
+    cd.m_focal = focal_length;
+    cd.m_k[0] = k[0];
+    cd.m_k[1] = k[1];
+    memcpy(cd.m_R, R, sizeof(double) * 9);
+    memcpy(cd.m_t, t, sizeof(double) * 3);
+
+    cd.Finalize();
+
+    m_image_data[i].m_camera = cd;
+   }
+ }
+
+//--[4] Read in the points of the bundle/world point cloud.
+m_point_data.clear();
+m_point_data.resize(num_points);
+
+int num_min_views_points = 0;
+for (int i = 0; i < num_points; i++) 
+ {
+  PointData &pt = m_point_data[i];
+
+  //--[4.1] Position 
+  fscanf(f, "%lf %lf %lf\n", pt.m_pos + 0, pt.m_pos + 1, pt.m_pos + 2);
+
+  //--[4.2] Color
+  fscanf(f, "%f %f %f\n", pt.m_color + 0, pt.m_color + 1, pt.m_color + 2);
+
+  //--[4.3] Visibility info (frame, keypoint index, coord location).
+  int num_visible;
+  fscanf(f, "%d", &num_visible);    // How many images have this point?
+  pt.m_num_vis=num_visible;
+
+  if (num_visible >=3)              // If more than three, add as good point.
+    num_min_views_points++;
+
+  for (int j = 0; j < num_visible; j++) 
+   {
+    int view, key;
+    fscanf(f, "%d %d", &view, &key);
+
+    if (m_image_data[view].m_camera.m_adjusted) 
+     {
+      /* Check chirality */
+      bool val = (m_bundle_version >= 0.3);
+
+      double proj_test[2];
+      if (m_image_data[view].m_camera.Project(pt.m_pos, proj_test) == val) 
+       {
+        pt.m_views.push_back(ImageKey(view, key));
+       } 
+      else 
+       {
+        printf("[BaseApp::ReadBundleFile] "
+               "Excluding view %d from point %d [chirality]\n", view, i);
+       }   
+     }
+            
+    if (m_bundle_version >= 0.3) 
+     {
+      double x, y;
+      fscanf(f, "%lf %lf", &x, &y);
+     }
+   }
+
+  // #define CROP_POINT_CLOUD
+  #ifdef CROP_POINT_CLOUD
+  const double x_min = 1.327;
+  const double x_max = 3.556;
+  const double y_min = -1.414;
+  const double y_max = 1.074;
+  const double z_min = -5.502;
+  const double z_max = -3.288;
+        
+  if (pt.m_pos[0] < x_min || pt.m_pos[0] > x_max ||
+      pt.m_pos[1] < y_min || pt.m_pos[1] > y_max ||
+      pt.m_pos[2] < z_min || pt.m_pos[2] > z_max) 
+    pt.m_views.clear();
+  #endif /* CROP_POINT_CLOUD */
+ }
+
+fclose(f);
+
+#ifdef _DEBUG_
+printf("[BaseApp::ReadBundleFile] %d / %d points visible to over 2 cameras!\n",
+       num_min_views_points, num_points);
+#endif
+}
+
+//IAMHERE.
+/*------------------------- ReloadBundleFile -------------------------*/
+/* 
+   Reload information about the "world" from the specified file.
+*/
 void BaseApp::ReloadBundleFile(char *filename)
 {
 #ifndef __DEMO__
-    /* Count the old number of cameras */
-    int num_images = GetNumImages();
+/* Count the old number of cameras */
+int num_images = GetNumImages();
 
-    int old_num_cameras = 0;
-    for (int i = 0; i < num_images; i++) {
-        if (m_image_data[i].m_camera.m_adjusted)
-            old_num_cameras++;
-    }
-
+int old_num_cameras = 0;
+for (int i = 0; i < num_images; i++) 
+ {
+  if (m_image_data[i].m_camera.m_adjusted)
+    old_num_cameras++;
+ }
 
     /* Save the previous model */
     std::vector<PointData> old_points = m_point_data;
@@ -898,7 +879,7 @@ void BaseApp::WritePointsXML(const char *filename)
     int min_views = 3;
 
     if (f == NULL) {
-	printf("[SifterApp::WritePointsXML] "
+	printf("[BaseApp::WritePointsXML] "
 	       "Error opening file %s for writing\n", filename);
 	return;
     }
@@ -919,7 +900,7 @@ void BaseApp::WritePointsXML(const char *filename)
     fprintf(f, "</points>\n");
     fclose(f);
 
-    printf("[SifterApp::WritePointsXML] %d / %d points seen by >= %d views\n",
+    printf("[BaseApp::WritePointsXML] %d / %d points seen by >= %d views\n",
 	   num_ge2, num_points, min_views);
 }
 
@@ -930,7 +911,7 @@ void BaseApp::WritePointsGeoXML(const char *filename)
     int min_views = 2;
 
     if (f == NULL) {
-	printf("[SifterApp::WritePointsXML] "
+	printf("[BaseApp::WritePointsXML] "
 	       "Error opening file %s for writing\n", filename);
 	return;
     }
@@ -952,7 +933,7 @@ void BaseApp::WritePointsGeoXML(const char *filename)
     fprintf(f, "</points>\n");
     fclose(f);
 
-    printf("[SifterApp::WritePointsXML] %d / %d points seen by >= %d views\n",
+    printf("[BaseApp::WritePointsXML] %d / %d points seen by >= %d views\n",
 	   num_ge2, num_points, min_views);
 }
 
@@ -969,7 +950,7 @@ void BaseApp::ReadMatchTableDrew(const char *append)
     FILE *f1 = fopen(buf, "r");
     
     if (f0 == NULL || f1 == NULL) {
-        printf("[SifterApp::ReadMatchTableDrew] "
+        printf("[BaseApp::ReadMatchTableDrew] "
                "Error opening files for reading.\n");
         return;
     }
@@ -1036,7 +1017,7 @@ void BaseApp::WriteMatchTableDrew(const char *append)
     FILE *f1 = fopen(buf, "w");
     
     if (f0 == NULL || f1 == NULL) {
-        printf("[SifterApp::WriteMatchTableDrew] "
+        printf("[BaseApp::WriteMatchTableDrew] "
                "Error opening files for writing.\n");
         return;
     }
@@ -1187,7 +1168,7 @@ void BaseApp::ReadKeyColors()
 void BaseApp::ReadCameraConstraints() 
 {
     if (FileExists("camera-constraints.txt")) {
-	printf("[SifterApp::ReadCameraConstraints] Reading constraints\n");
+	printf("[BaseApp::ReadCameraConstraints] Reading constraints\n");
 
 	FILE *f = fopen("camera-constraints.txt", "r");
 	char buf[256];
@@ -1233,7 +1214,7 @@ void BaseApp::ReadPointConstraints()
     FILE *f = fopen(m_point_constraint_file, "r");
     
     if (f == NULL) {
-	printf("[SifterApp::ReadPointConstraints] Error opening file %s "
+	printf("[BaseApp::ReadPointConstraints] Error opening file %s "
 	       "for reading\n", m_point_constraint_file);
 	return;
     }
@@ -1268,7 +1249,7 @@ void BaseApp::ReadPointConstraints()
 
 	m_point_constraints[pt_idx] = v3_new(x, y, -z);
 
-	printf("[SifterApp::ReadPointConstraints] Constraining %d: "
+	printf("[BaseApp::ReadPointConstraints] Constraining %d: "
 	       "%0.3f %0.3f %0.3f (%0.3f %0.3f %0.3f) => %0.3f %0.3f %0.3f\n",
 	       pt_idx, 
 	       m_point_data[pt_idx].m_pos[0], 
@@ -1347,7 +1328,7 @@ void BaseApp::ReadIgnoreFile()
     FILE *f = fopen(m_ignore_file, "r");
 
     if (f == NULL) {
-	printf("[SifterApp::ReadIgnoreFile] Error opening file %s "
+	printf("[BaseApp::ReadIgnoreFile] Error opening file %s "
 	       "for reading\n", m_ignore_file);
 	return;
     }
@@ -1358,12 +1339,12 @@ void BaseApp::ReadIgnoreFile()
 	int img = atoi(buf);
 	
 	if (img < 0 || img >= num_images) {
-	    printf("[SifterApp::ReadIgnoreFile] "
+	    printf("[BaseApp::ReadIgnoreFile] "
 		   "Error: image %d out of range\n", img);
 	    continue;
 	}
 	
-	printf("[SifterApp::ReadIgnoreFile] Ignoring image %d\n", img);
+	printf("[BaseApp::ReadIgnoreFile] Ignoring image %d\n", img);
 	m_image_data[img].m_ignore_in_bundle = true;
     }
 
@@ -1384,7 +1365,7 @@ void BaseApp::InitializeImagesFromFile(FILE *f)
 	data.InitFromString(buf, m_image_directory, false);
 	data.m_licensed = true;
 
-	printf("[SifterApp::InitializeImagesFromFile] Initializing image %s\n",
+	printf("[BaseApp::InitializeImagesFromFile] Initializing image %s\n",
 	       data.m_name);
 
 	/* Read the extra data */

@@ -813,56 +813,59 @@ void ImageData::LoadDescriptors(bool undistort) {
 #endif
 }
 
-void ImageData::LoadKeys(bool descriptor, bool undistort) {
+void ImageData::LoadKeys(bool descriptor, bool undistort) 
+{
 #ifndef __DEMO__
-    if (m_keys_loaded && !descriptor)
-	return;   /* Already loaded the keys */
+if (m_keys_loaded && !descriptor)
+  return;   /* Already loaded the keys */
 
-    if (m_keys_desc_loaded && descriptor)
-        return;   /* Already loaded keys with descriptors */
+if (m_keys_desc_loaded && descriptor)
+  return;   /* Already loaded keys with descriptors */
 
-    /* Try to find a keypoint file */
-    if (!descriptor) {
-        std::vector<Keypoint> kps = ReadKeyFile(m_key_name);
+/* Try to find a keypoint file */
+if (!descriptor) 
+ {
+  std::vector<Keypoint> kps = ReadKeyFile(m_key_name);
 
-        /* Flip y-axis to make things easier */
-        for (int k = 0; k < (int) kps.size(); k++) {
-            kps[k].m_y = GetHeight() - kps[k].m_y - 1.0;
-        }
+  /* Flip y-axis to make things easier */
+  for (int k = 0; k < (int) kps.size(); k++) 
+    kps[k].m_y = GetHeight() - kps[k].m_y - 1.0;
         
-        /* Now make the image center the origin */
-        for (int k = 0; k < (int) kps.size(); k++) {
-            kps[k].m_x -= 0.5 * (GetWidth() - 1);
-            kps[k].m_y -= 0.5 * (GetHeight() - 1);
-        }
+  /* Now make the image center the origin */
+  for (int k = 0; k < (int) kps.size(); k++) 
+   {
+    kps[k].m_x -= 0.5 * (GetWidth() - 1);
+    kps[k].m_y -= 0.5 * (GetHeight() - 1);
+   }
         
-        m_keys = kps;
+  m_keys = kps;
+  m_keys_loaded = true;
+ } 
+else 
+ {
+  std::vector<KeypointWithDesc> kps = ReadKeyFileWithDesc(m_key_name, true);
+
+  /* Flip y-axis to make things easier */
+  for (int k = 0; k < (int) kps.size(); k++) 
+   {
+    kps[k].m_y = GetHeight() - kps[k].m_y - 1.0;
+   }
+        
+  /* Now make the image center the origin */
+  for (int k = 0; k < (int) kps.size(); k++) 
+   {
+    kps[k].m_x -= 0.5 * GetWidth();
+    kps[k].m_y -= 0.5 * GetHeight();
+   }
+        
+  m_keys_desc = kps;
+  m_keys_desc_loaded = true;            
+ }
     
-        m_keys_loaded = true;
-    } else {
-        std::vector<KeypointWithDesc> kps = 
-            ReadKeyFileWithDesc(m_key_name, true);
-
-        /* Flip y-axis to make things easier */
-        for (int k = 0; k < (int) kps.size(); k++) {
-            kps[k].m_y = GetHeight() - kps[k].m_y - 1.0;
-        }
-        
-        /* Now make the image center the origin */
-        for (int k = 0; k < (int) kps.size(); k++) {
-            kps[k].m_x -= 0.5 * GetWidth();
-            kps[k].m_y -= 0.5 * GetHeight();
-        }
-        
-        m_keys_desc = kps;
-    
-        m_keys_desc_loaded = true;            
-    }
-    
-    if (undistort)
-        UndistortKeys();
+if (undistort)
+  UndistortKeys();
 #else
-    printf("Cannot load keys in demo version\n");
+printf("Cannot load keys in demo version\n");
 #endif
 }
 

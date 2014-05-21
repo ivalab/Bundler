@@ -84,7 +84,7 @@ BUNDLER  = [BASEPATH '/' BUNDLER];
 
 %==[2] Perform SIFT detection and description on all loadable images.
 %       Save them to a Matlab file for loading as needed.
-IMAGEPATH = 'C:/Users/ioannis6/Bundler/examples/ET'; %=========Changed, you may rechange it
+IMAGEPATH = 'H:/ioannis6/Documents/projects/Bundler/examples/ET'; %=========Changed, you may rechange it
 IMAGETYPE = 'jpg';
 
 parms.improcessor = improcessor_basic('rgb2gray',{});     %=========What are you trying to achieve... It doesn't work!!!

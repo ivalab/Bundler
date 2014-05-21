@@ -11,33 +11,30 @@
 %
 %================================ vispts01 ===============================
 
-function vispts01(IMAGEPATH, IMAGETYPE, NumFrame)
+NumFrame = 5;
 
-  %Load Image
-  ih = impathreader(IMAGEPATH, ['*.' IMAGETYPE], []);
-  
-  if exist([ IMAGEPATH '/keypts' num2str(NumFrame,'%04d') '.mat'])
-    siftdat = load([ IMAGEPATH '/keypts' num2str(NumFrame,'%04d') '.mat']);
-  else
-    error('This file does not exist');
-  end
-  
-  I = ih.jumpto(NumFrame);
-   
-  
-  
-   
 
-%   The first two elements are the location in the image.
-%   The third is the orientation.  Turn it into a 2x1 vector (unit length).
-%   The fourth is the scale.  Use it to scale the vector.
-    
+IMAGEPATH = 'H:/ioannis6/Documents/projects/Bundler/examples/ET'; %=========You may Change it
+IMAGETYPE = 'jpg';
 
-  % Plot the Image
-    imshow(I);
-    hold on
-    quiver(siftdat.keyp(1,:),siftdat.keyp(2,:),siftdat.keyp(3,:)./norm(siftdat.keyp(3,:)).*siftdat.keyp(4,:),siftdat.keyp(4,:),1);
-    hold off
+%Load Image
+ih = impathreader(IMAGEPATH, ['*.' IMAGETYPE], []);
+  
+if exist([ IMAGEPATH '/keypts' num2str(NumFrame,'%04d') '.mat'])
+  siftdat = load([ IMAGEPATH '/keypts' num2str(NumFrame,'%04d') '.mat']);
+else
+  error('This file does not exist');
+end
+  
+I = ih.jumpto(NumFrame);
+
+vector = [cos(siftdat.keyp(3,:)); sin(siftdat.keyp(3,:))];
+
+% Plot the Image
+imshow(I),
+ hold on
+  quiver(siftdat.keyp(1,:),siftdat.keyp(2,:),vector(1,:).*siftdat.keyp(4,:),vector(2,:).*siftdat.keyp(4,:),1);
+ hold off
     
 
 

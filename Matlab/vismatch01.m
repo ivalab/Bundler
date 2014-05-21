@@ -36,29 +36,7 @@ function vismatch01(IMAGEPATH,NumFrame1,NumFrame2)
 
   % Plot matches
  
-  figure,
    colormap = {'b','r','m','y','g','c'};
-   height = max(size(I1,1),size(I2,1));
-   I1_ratio = height/size(I1,1);
-   I2_ratio = height/size(I2,1);
-   I1 = imresize(I1,I1_ratio);
-   I2 = imresize(I2,I2_ratio);
-   points1 = pts(:,1:2) .* I1_ratio;
-   points2 = pts(:,3:4) .* I2_ratio;
-   points1 = [points1(:,2) points1(:,1)];
-   points2 = [points2(:,2) points2(:,1)];
-   match_img = zeros(height, size(I1,2)+size(I2,2), size(I2,3));
-   match_img(1:size(I1,1),1:size(I1,2),:) = I1;
-   match_img(1:size(I2,1),size(I1,2)+1:end,:) = I2;
-   imshow(uint8(match_img));
-   hold on;
-     for i=1:size(points1,1)
-        plot([points1(i,2) points2(i,2)+size(I1,2)],[points1(i,1) points2(i,1)],colormap{mod(i,6)+1});
-     end
-
-   hold off;
-
-  
 
   figure,
    hold on

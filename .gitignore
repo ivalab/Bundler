@@ -1,6 +1,7 @@
 build
 *.[oa]
 *.so
+Matlab/output
 bin/
 src/Bundle2PMVS
 src/Bundle2Vis

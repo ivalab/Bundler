@@ -1,35 +1,44 @@
 %================================ vispts01 ===============================
 %
 %  script vispts01.m
-%
-%
+%  
+%  input: IMAGEPATH: Path of the images
+%         IMAGETYPE: Type of image e.g. 'jpg'
+%         frame: The image to be visualized
+%  
 %  Visualize the keypoints found using SIFT.  Plots the image and then
 %  plots a vector indicating the direction and scale of the attribute.
 %
 %================================ vispts01 ===============================
 
+function vispts01(IMAGEPATH, IMAGETYPE, NumFrame)
 
-As with part01, use the impathreader to load a file.
-The file should have a variable indicating which frame to load.
-After loading the frame, load the data for that frame as written
-by part01.m
+  %Load Image
+  ih = impathreader(IMAGEPATH, ['*.' IMAGETYPE], []);
+  
+  if exist([ IMAGEPATH '/keypts' num2str(NumFrame,'%04d') '.mat'])
+    siftdat = load([ IMAGEPATH '/keypts' num2str(NumFrame,'%04d') '.mat']);
+  else
+    error('This file does not exist');
+  end
+  
+  I = ih.jumpto(NumFrame);
+   
+  
+  
+   
 
-The load invocation should be like:
+%   The first two elements are the location in the image.
+%   The third is the orientation.  Turn it into a 2x1 vector (unit length).
+%   The fourth is the scale.  Use it to scale the vector.
+    
 
-siftdat = load( properfilenamevariable );
-
-which will then dump the contents as a structure into siftdat
-variable.  Access to the data is via: siftdat.keyp and siftdat.desc
-
-All you should use is siftdat.keyp.
-
-The first two elements are the location in the image.
-The third is the orientation.  Turn it into a 2x1 vector (unit length).
-The fourth is the scale.  Use it to scale the vector.
-
-Plot the image.
-Use Matlab's quiver command with scale = 1 to plot the SIFT key point
-info on the image.  Make sure to hold on.
+  % Plot the Image
+    imshow(I);
+    hold on
+    quiver(siftdat.keyp(1,:),siftdat.keyp(2,:),siftdat.keyp(3,:)./norm(siftdat.keyp(3,:)).*siftdat.keyp(4,:),siftdat.keyp(4,:),1);
+    hold off
+    
 
 
 %

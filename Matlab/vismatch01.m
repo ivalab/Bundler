@@ -46,7 +46,7 @@ figure,
   set(gca,'ydir','reverse')
   set(gcf,'position',[567    66   854   709])
 
-  NGap = 50;
+  NGap = 10;
   gap = ones(size(I1,1),NGap,3)*0.9/2;
 
   image([I1,gap,I2]);

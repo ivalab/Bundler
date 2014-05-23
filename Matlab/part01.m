@@ -116,10 +116,9 @@ end
 %==[3] Perform matching of SIFT features across images.
 
 ih.reset();
-ih2 = impathreader(IMAGEPATH, ['*.' IMAGETYPE], [], parms);
 
 %IOANNIS: Learn to use Matlab's inline functions to make life cleaner.
-genFilename = @(ind)load([IMAGEPATH '/keypts' num2str(ih.frame(),'%04d') '.mat']);
+genFilename = @(ind)load([IMAGEPATH '/keypts' num2str(ind,'%04d') '.mat']);
 genMatchname = @(i1, i2)[IMAGEPATH '/matches_' num2str(i1,'%04d') '_' ...
                                                num2str(i2, '%04d') '.mat'];
 
@@ -130,7 +129,7 @@ iter = 1;
 for i=1:ih.length();
   I1 = ih.jumpto(i);
 
-  for j=i:ih.length();
+  for j=i+1:ih.length();
     I2 = ih.jumpto(j);
 
     SiftdatIm1 = genFilename(i);

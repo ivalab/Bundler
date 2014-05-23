@@ -104,15 +104,14 @@ ih = impathreader(IMAGEPATH, ['*.' IMAGETYPE], [], parms);
 %IOANNIS:  for image conversion.  If you are clever you can use
 %IOANNIS:  the improcessor to do lots of funky things.
 
-%while (ih.isNext())
+while (ih.isNext())
   I = ih.next();
   [keyp, desc] = vl_sift(I); 
 
   outfile = [ IMAGEPATH '/keypts' num2str(ih.frame(),'%04d') '.mat']
-  %save(outfile, 'keyp', 'desc');
-%end
+  save(outfile, 'keyp', 'desc');
+end
 
-return
 
 %==[3] Perform matching of SIFT features across images.
 
@@ -120,13 +119,14 @@ ih.reset();
 ih2 = impathreader(IMAGEPATH, ['*.' IMAGETYPE], [], parms);
 
 %IOANNIS: Learn to use Matlab's inline functions to make life cleaner.
-genFilename = @(ind)[IMAGEPATH '/keypts' num2str(ih.frame(),'%04d') '.mat'];
+genFilename = @(ind)load([IMAGEPATH '/keypts' num2str(ih.frame(),'%04d') '.mat']);
 genMatchname = @(i1, i2)[IMAGEPATH '/matches_' num2str(i1,'%04d') '_' ...
                                                num2str(i2, '%04d') '.mat'];
 
 %IOANNIS: You did not read about the impathreader.  It has more flexibility
 %IOANNIS:  Than what you used.  Always read what you are using and
 %IOANNIS:  understand what the interface and its abilities are.
+iter = 1;
 for i=1:ih.length();
   I1 = ih.jumpto(i);
 

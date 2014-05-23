@@ -44,35 +44,44 @@
 %
 %================================= part01 ================================
 
-%==Include Path of matlab functions
-MATLIBPATH = 'H:/ioannis6/Documents/Matlab/';
-MATLIBS = {'improcessors', 'readers'};
+%==[0] Setup the environment.
+%
 
-
-for ii=1:length(MATLIBS)
-  addpath([MATLIBPATH '/' MATLIBS{ii}]);
-end
-
-%==[0] Options.
-visOutput = false;
-
-%==[1] Setup the environment.
+%--[0.1] Directories where things will be found.
 BASEPATH = mfilename('fullpath'); 
 if (ispc)
+  IMAGEPATH = 'H:/ioannis6/Documents/projects/Bundler/examples/ET'; 
+  MATLIBPATH = 'H:/ioannis6/Documents/Matlab/';
+  VLFEATPATH = 'H:/ioannis6/Documents/lib/vlfeat-0.9.18'; % Now you change!
+
   BASEPATH = BASEPATH(1:find(BASEPATH == '\',1,'last'));
   BUNDLER = 'Bundler';
 elseif (isunix)
+  IMAGEPATH = '~/projects/SLAM/Bundler/examples/ET';
+  MATLIBPATH = '~/Matlab';
+  VLFEATPATH = '~/src/cvLibs/vlfeat';
+
   BASEPATH = BASEPATH(1:find(BASEPATH == '/',1,'last'));
   BUNDLER = 'bundler';
 end
 
-% Include vlfeat
-addpath([BASEPATH 'lib/vlfeat-0.9.18/toolbox']);
-run('vl_setup');
+%--[0.2] Include libraries.
+MATLIBS = {'improcessors', 'readers'};
+for ii=1:length(MATLIBS)
+  addpath([MATLIBPATH '/' MATLIBS{ii}]);
+end
 
-KEYMATCH = [BASEPATH '/KeyMatchFull'];
-BUNDLER  = [BASEPATH '/' BUNDLER];
+%--[0.3] Include vlfeat
+addpath([VLFEATPATH '/toolbox']);
+run('vl_setup');        
 
+%
+%==[1] Options.
+%
+visOutput = false;
+IMAGETYPE = 'jpg';
+
+%
 %disp('Need to write the ToSift script');
 %TO_SIFT=$BASEPATH/bin/ToSift.sh
 %disp('Need to write the extract_focal script or ignore it.');
@@ -84,48 +93,59 @@ BUNDLER  = [BASEPATH '/' BUNDLER];
 
 %==[2] Perform SIFT detection and description on all loadable images.
 %       Save them to a Matlab file for loading as needed.
-IMAGEPATH = 'H:/ioannis6/Documents/projects/Bundler/examples/ET'; %=========Changed, you may rechange it
-IMAGETYPE = 'jpg';
 
-parms.improcessor = improcessor_basic('rgb2gray',{});     %=========What are you trying to achieve... It doesn't work!!!
+parms.improcessor = improcessor_basic('rgb2gray',{},'single',{});     
 ih = impathreader(IMAGEPATH, ['*.' IMAGETYPE], [], parms);     
+%IOANNIS: The impathreader did not incorporate improcessor like
+%IOANNIS:  other readers do. My bad.  I corrected.  Now it runs
+%IOANNIS:  the commands above (after loading the image and ) prior to 
+%IOANNIS:  returning the final image.  It should be in the format
+%IOANNIS:  needed by SIFT so you don't have to add annoying code
+%IOANNIS:  for image conversion.  If you are clever you can use
+%IOANNIS:  the improcessor to do lots of funky things.
 
-while (ih.isNext())
+%while (ih.isNext())
   I = ih.next();
-  [keyp, desc] = vl_sift(single(rgb2gray(I))); 
+  [keyp, desc] = vl_sift(I); 
 
-  outfile = [ IMAGEPATH '/keypts' num2str(ih.frame(),'%04d') '.mat'];
-  save(outfile, 'keyp', 'desc');
-end
+  outfile = [ IMAGEPATH '/keypts' num2str(ih.frame(),'%04d') '.mat']
+  %save(outfile, 'keyp', 'desc');
+%end
 
+return
 
 %==[3] Perform matching of SIFT features across images.
 
 ih.reset();
 ih2 = impathreader(IMAGEPATH, ['*.' IMAGETYPE], [], parms);
 
-iter = 1;
-while (ih.isNext())  
-  I1 = ih.next();
-  SiftdatIm1 = load([ IMAGEPATH '/keypts' num2str(ih.frame(),'%04d') '.mat']);
-  
-  while (ih2.isNext())   
-    I2 = ih2.next();
-    if (ih2.frame()>ih.frame())
-      SiftdatIm2 = load([ IMAGEPATH '/keypts' num2str(ih2.frame(),'%04d') '.mat']);
-      [matches, scores] = vl_ubcmatch(SiftdatIm1.desc,SiftdatIm2.desc);
-   
-       outfile = [ IMAGEPATH '/matches' num2str(['_',sprintf( '%04d', ih.frame()), '_', sprintf('%04d', ih2.frame())]) '.mat'];
-       save(outfile,'matches','scores');
- 
-       pts{iter} = ([SiftdatIm1.keyp(1:2,matches(1,:));SiftdatIm2.keyp(1:2,matches(2,:))]');
-       iter = iter + 1;
+%IOANNIS: Learn to use Matlab's inline functions to make life cleaner.
+genFilename = @(ind)[IMAGEPATH '/keypts' num2str(ih.frame(),'%04d') '.mat'];
+genMatchname = @(i1, i2)[IMAGEPATH '/matches_' num2str(i1,'%04d') '_' ...
+                                               num2str(i2, '%04d') '.mat'];
 
-    end
+%IOANNIS: You did not read about the impathreader.  It has more flexibility
+%IOANNIS:  Than what you used.  Always read what you are using and
+%IOANNIS:  understand what the interface and its abilities are.
+for i=1:ih.length();
+  I1 = ih.jumpto(i);
+
+  for j=i:ih.length();
+    I2 = ih.jumpto(j);
+
+    SiftdatIm1 = genFilename(i);
+    SiftdatIm2 = genFilename(j);
+  
+    [matches, scores] = vl_ubcmatch(SiftdatIm1.desc,SiftdatIm2.desc);
+   
+    outfile = genMatchname(i, j);
+    save(outfile,'matches','scores');
+ 
+    pts{iter} = ([SiftdatIm1.keyp(1:2,matches(1,:)); ...
+                  SiftdatIm2.keyp(1:2,matches(2,:))]');
+    %IOANNIS: What the heck is the above?  Doesn't appear to get used.
+    iter = iter + 1;
   end
-  
-  ih2.reset();
-  
 end
 
 outfile = [ IMAGEPATH '/pts' '.mat'];

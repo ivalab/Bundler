@@ -50,9 +50,9 @@
 %--[0.1] Directories where things will be found.
 BASEPATH = mfilename('fullpath'); 
 if (ispc)
-  IMAGEPATH = 'H:/ioannis6/Documents/projects/Bundler/examples/ET'; 
-  MATLIBPATH = 'H:/ioannis6/Documents/Matlab/';
-  VLFEATPATH = 'H:/ioannis6/Documents/lib/vlfeat-0.9.18'; % Now you change!
+  IMAGEPATH = 'C:/Users/Ioannis-pc/Documents/Projects/bundler/examples/ET'; 
+  MATLIBPATH = 'C:/Users/Ioannis-pc/Documents/Projects/github.storm.gatech.edu\Matlab';
+  VLFEATPATH = 'C:/Users/Ioannis-pc/Documents/Projects/vlfeat-0.9.18'; % Now you change!
 
   BASEPATH = BASEPATH(1:find(BASEPATH == '\',1,'last'));
   BUNDLER = 'Bundler';
@@ -106,7 +106,7 @@ ih = impathreader(IMAGEPATH, ['*.' IMAGETYPE], [], parms);
 
 while (ih.isNext())
   I = ih.next();
-  [keyp, desc] = vl_sift(I); 
+  [keyp, desc] = vl_sift(single(rgb2gray(I))); 
 
   outfile = [ IMAGEPATH '/keypts' num2str(ih.frame(),'%04d') '.mat']
   save(outfile, 'keyp', 'desc');
@@ -118,7 +118,7 @@ end
 ih.reset();
 
 %IOANNIS: Learn to use Matlab's inline functions to make life cleaner.
-genFilename = @(ind)load([IMAGEPATH '/keypts' num2str(ind,'%04d') '.mat']);
+genFilename = @(ind)[IMAGEPATH '/keypts' num2str(ind,'%04d') '.mat'];
 genMatchname = @(i1, i2)[IMAGEPATH '/matches_' num2str(i1,'%04d') '_' ...
                                                num2str(i2, '%04d') '.mat'];
 
@@ -132,23 +132,19 @@ for i=1:ih.length();
   for j=i+1:ih.length();
     I2 = ih.jumpto(j);
 
-    SiftdatIm1 = genFilename(i);
-    SiftdatIm2 = genFilename(j);
+    SiftdatIm1 = load(genFilename(i));
+    SiftdatIm2 = load(genFilename(j));
   
     [matches, scores] = vl_ubcmatch(SiftdatIm1.desc,SiftdatIm2.desc);
-   
-    outfile = genMatchname(i, j);
-    save(outfile,'matches','scores');
- 
-    pts{iter} = ([SiftdatIm1.keyp(1:2,matches(1,:)); ...
+     
+    pts = ([SiftdatIm1.keyp(1:2,matches(1,:)); ...
                   SiftdatIm2.keyp(1:2,matches(2,:))]');
-    %IOANNIS: What the heck is the above?  Doesn't appear to get used.
-    iter = iter + 1;
+              
+    outfile = genMatchname(i, j);
+    save(outfile,'matches','scores','pts');
+ 
   end
 end
-
-outfile = [ IMAGEPATH '/pts' '.mat'];
-save(outfile,'pts');
 
 %TODO: Consider the two images to be "connected" if
 % more than some percentage of feature points match (read Snavely thesis
@@ -161,22 +157,6 @@ save(outfile,'pts');
 % Fundamental Matrix for the pair using RANSAC, remove outliers etc. 
 % If the number of remaining
 % matches is less than twenty, all matches are removed.
-
-% Keep track of connectivity and output to Matlab structure the pairwise
-% matches for that given frame.  Should there be a separate file for each
-% pairwise match, or one file for all given a frame as per Bundler? I
-% prefer one file... It's getting messy for multiple files
-% 
-% 
-% Save the matching keypoint indices from the two frames in a variable
-% called inds (2xN variable, with first column being index to first image
-% keypoint list and second column being index to second image keypoint
-% list).???????? Isn't this what the output file Matches000____.mat gives??
-% Save the matching keypoint image locations in a variable called pts
-% (2x2xN) variable.???? Isn't this supposed to be 4xNxNumImages, x,y coordinates in the images 
-% and N the number of matches?
-%   You might or might not need the cat command.
-%}
 
 %==[4] Execute bundler on the images.
 %{

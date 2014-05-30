@@ -50,9 +50,9 @@
 %--[0.1] Directories where things will be found.
 BASEPATH = mfilename('fullpath'); 
 if (ispc)
-  IMAGEPATH = 'C:/Users/Ioannis-pc/Documents/Projects/bundler/examples/ET'; 
-  MATLIBPATH = 'C:/Users/Ioannis-pc/Documents/Projects/github.storm.gatech.edu\Matlab';
-  VLFEATPATH = 'C:/Users/Ioannis-pc/Documents/Projects/vlfeat-0.9.18'; % Now you change!
+  IMAGEPATH = 'H:/ioannis6/Documents/projects/bundler/examples/ET'; 
+  MATLIBPATH = 'H:/ioannis6/Documents/Matlab';
+  VLFEATPATH = 'H:/ioannis6/Documents/projects/vlfeat'; % Now you change!
 
   BASEPATH = BASEPATH(1:find(BASEPATH == '\',1,'last'));
   BUNDLER = 'Bundler';
@@ -144,6 +144,81 @@ for i=1:ih.length();
     save(outfile,'matches','scores','pts');
  
   end
+end
+
+
+%% Extract focal length
+
+
+ImNames = dir(fullfile([IMAGEPATH '/' '*.jpg']));
+
+num_output_images = 0;
+
+for i=1:ih.length();
+  %Extract image's info  
+  exif = imfinfo([IMAGEPATH '/' ImNames(i).name]);
+  
+  % Grab Camera Model
+  if (~isempty(exif.Make))
+    Make = exif.Make;
+    Model = exif.Model;
+  end
+  
+  % Grab focal length
+  if (~isempty(exif.DigitalCamera.FocalLength))
+    FocalLength = exif.DigitalCamera.FocalLength;
+  else
+    FocalLength = 0;
+  end
+  
+  % Grab dimensions
+  x_res = exif.DigitalCamera.CPixelXDimension;
+  y_res = exif.DigitalCamera.CPixelYDimension;
+  
+  %Grab CCD width from known cameras
+  ccd = load('CCD_WIDTHS.MAT');
+  Pos = strmatch([Make ' ' Model], ccd.ccd_models);
+  
+  if (~isempty(Pos))
+    ccd_width = ccd.ccd_widths(Pos);
+  %If the camera model's ccd width is not known then run jhead.exe
+  else
+    [status,cmdout] = system([BASEPATH 'bin/jhead.exe' [' ' IMAGEPATH '/' ImNames(i).name]]);
+    Key   = 'CCD width    :';
+    Index = strfind(cmdout, Key);
+    if (~isempty(Index))
+      ccd_width = sscanf(cmdout(Index(1) + length(Key):end), '%g', 1);
+    %If jhead.exe cannot extract ccd width ask user for focal length
+    else 
+      prompt = 'Do you want to add the ccd width? [Y/N] ';
+      str = input(prompt,'s');
+      if isempty(str) || str =='N'
+        str = 'N';
+        ccd_width = 0;
+     else
+        prompt = 'Add the ccd width in mm ';
+        ccd_width = input(prompt);
+      end  
+    end
+  end
+   
+ % Check
+  if (FocalLength == 0 || ccd_width == 0 || x_res == 0) 
+    disp('Could not extract required fields');
+  else
+    if (x_res < y_res) 
+	  tmp = x_res;
+	  x_res = y_res;
+	  y_res = tmp;
+    end
+    num_output_images = num_output_images + 1;
+    
+    %Extract focal length
+    focal_pixels(num_output_images) = x_res * FocalLength/ccd_width;
+          
+ end
+          
+   
 end
 
 %TODO: Consider the two images to be "connected" if
